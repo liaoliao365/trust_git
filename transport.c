@@ -805,10 +805,13 @@ static int git_transport_push(struct transport *transport, struct ref *remote_re
 
 	if (transport_color_config() < 0)
 		return -1;
-
+	//什么情况会触发这个分支？
+	//transport_push中已经调用过get_refs_via_connect并将其返回结果放在remote_refs中传给了本函数
+	//这里再次调用get_refs_via_connect，但是并没有存储到任何变量中
+	//可能只是确保网络连接是活跃的（handshake 函数的副作用）或者验证远程仓库的可访问性
 	if (!data->got_remote_heads)
 		get_refs_via_connect(transport, 1, NULL);
-
+	//将所有传输层的标志转换为发送包的参数
 	memset(&args, 0, sizeof(args));
 	args.send_mirror = !!(flags & TRANSPORT_PUSH_MIRROR);
 	args.force_update = !!(flags & TRANSPORT_PUSH_FORCE);
@@ -1270,9 +1273,11 @@ int transport_push(struct repository *r,
 
 	if (transport_color_config() < 0)
 		return -1;
-
+	//传输层能力检查
 	if (transport->vtable->push_refs) {
+		//推送逻辑
 		struct ref *remote_refs;
+		//本地引用获取，会收集所有类型的本地引用
 		struct ref *local_refs = get_local_heads();
 		int match_flags = MATCH_REFS_NONE;
 		int verbose = (transport->verbose > 0);
@@ -1282,19 +1287,76 @@ int transport_push(struct repository *r,
 		int push_ret, ret, err;
 		struct transport_ls_refs_options transport_options =
 			TRANSPORT_LS_REFS_OPTIONS_INIT;
-
+		//本地引用验证
 		if (check_push_refs(local_refs, rs) < 0)
 			return -1;
 
+		
+		// 引用前缀优化,只获取与推送相关的引用,减少网络传输量！！！！！
+		// 协议 v0/v1：可能返回全部引用
+		// 协议 v2：更智能，可以根据前缀过滤
+		// 这个函数确保在所有协议版本下都能正确工作
 		refspec_ref_prefixes(rs, &transport_options.ref_prefixes);
 
 		trace2_region_enter("transport_push", "get_refs_list", r);
+		//远程引用获取
 		remote_refs = transport->vtable->get_refs_list(transport, 1,
 							       &transport_options);
 		trace2_region_leave("transport_push", "get_refs_list", r);
-
+		//释放引用前缀
 		strvec_clear(&transport_options.ref_prefixes);
 
+		//=====================调试代码========================
+		//这里打印一下remote_refs，检查是否获取到了预期的引用，即refs/trustchain/
+		// struct ref *ref;
+		// for (ref = remote_refs ; ref; ref = ref->next) {
+		// 	printf("remote_ref: %s %s\n", ref->name, oid_to_hex(&ref->old_oid));
+		// }
+		// for (ref = local_refs; ref; ref = ref->next) {
+		// 	printf("local_ref: %s %s\n", ref->name, oid_to_hex(&ref->new_oid));
+		// }
+		//=====================调试代码========================
+
+		//=====================逻辑代码========================
+		//如果--trust_chain，则将refs/trustchain/从remote_refs中独立出来，单独先处理
+		//检验refs/trustchain/的引用和本地是否一致，不一致建议先pull
+		//但是即使没有--trust_chain，远程可能还是会返回refs/trustchain/head的引用，所以需要单独处理
+		// if (flags & TRANSPORT_PUSH_TRUST_CHAIN){
+		// 	// 遍历remote_refs，找到refs/trustchain/对应的ref，并从remote_refs中移除单独处理
+		// 	int trust_chain_flag = 0;
+		// 	struct ref *ref, *pre_ref;
+		// 	for (ref = remote_refs, pre_ref = NULL; ref; pre_ref = ref, ref = ref->next) {
+		// 		if (strcmp(ref->name, "refs/trustchain/head") == 0) {
+		// 			// 检验refs/trustchain/的引用和本地是否一致，不一致建议先pull
+		// 			// 打印ref->new_oid
+		// 			printf("ref->new_oid: %s\n", oid_to_hex(&ref->new_oid));
+		// 			// 打印ref->old_oid
+		// 			printf("ref->old_oid: %s\n", oid_to_hex(&ref->old_oid));
+
+		// 			if (!oideq(&ref->new_oid, &ref->old_oid)) {
+		// 				die(_("refs/trustchain/的引用和本地不一致，请先pull"));
+		// 			}
+		// 			// 如果一致，将ref从remote_refs中移除，为后面的推送做准备
+		// 			// 其实不删除应该也不影响
+		// 			if (pre_ref) {
+		// 				pre_ref->next = ref->next;
+		// 			} else {
+		// 				remote_refs = ref->next;
+		// 			}
+		// 			trust_chain_flag = 1;
+		// 			free(ref);
+		// 			break;
+		// 		}
+		// 	}
+		// 	if (trust_chain_flag == 0) {
+		// 		die(_("远程没有refs/trustchain/head的引用，可能是链遭到了破坏"));
+		// 	}
+		// }
+
+		// die(_("refs/trustchain/head1111的引用和本地一致"));
+		//=====================逻辑代码========================
+
+		//根据推送标志设置匹配规则
 		if (flags & TRANSPORT_PUSH_ALL)
 			match_flags |= MATCH_REFS_ALL;
 		if (flags & TRANSPORT_PUSH_MIRROR)
@@ -1303,24 +1365,49 @@ int transport_push(struct repository *r,
 			match_flags |= MATCH_REFS_PRUNE;
 		if (flags & TRANSPORT_PUSH_FOLLOW_TAGS)
 			match_flags |= MATCH_REFS_FOLLOW_TAGS;
-
+		
+		//建立引用映射 本地引用到远程引用的映射
 		if (match_push_refs(local_refs, &remote_refs, rs, match_flags))
 			return -1;
+		
+		if (flags & TRANSPORT_PUSH_TRUST_CHAIN){
+			//检查refs/trustchain/head的引用和本地是否一致
+			struct ref *ref, *pre_ref;
+			for (ref = remote_refs, pre_ref = NULL; ref; pre_ref = ref, ref = ref->next) {
+				if (strcmp(ref->name, "refs/trustchain/head") == 0) {
+					printf("check trustchain\n");
+					printf("ref->peer_ref->new_oid: %s\n", oid_to_hex(&ref->peer_ref->new_oid));
+					printf("ref->old_oid: %s\n", oid_to_hex(&ref->old_oid));
+					if (!oideq(&ref->peer_ref->new_oid, &ref->old_oid)) {
+						die(_("refs/trustchain/的引用和本地不一致，请先pull"));
+					}
+					break;
+				}
+			}
+			printf("trustchain检查通过，已是最新值\n");
+		}else{
+			printf("警告！没有进行trustchain检查，也不会将本次贡献上链，本次操作可能不可信！\n");
+		}
 
+		// die(_("debug:refs/trustchain/head1111的引用和本地一致"));
+
+		//CAS机制，设置检查的规则
 		if (transport->smart_options &&
 		    transport->smart_options->cas &&
 		    !is_empty_cas(transport->smart_options->cas))
 			apply_push_cas(transport->smart_options->cas,
 				       transport->remote, remote_refs);
-
+		//设置引用状态,为每个引用设置推送状态,判断推送是否会被接受或拒绝。处理镜像和强制推送标志
+		//！！！这个函数进行了快进检查，检查新提交是否是旧提交的后代！！！
+		//！！！我可以在ref_newer 函数增加我的代码，检查远程的链是否有更新
 		set_ref_status_for_push(remote_refs,
 			flags & TRANSPORT_PUSH_MIRROR,
 			flags & TRANSPORT_PUSH_FORCE);
-
+		//运行预推送钩子,检查推送权限
 		if (!(flags & TRANSPORT_PUSH_NO_HOOK))
 			if (run_pre_push_hook(transport, remote_refs))
 				return -1;
-
+		//子模块推送处理,根据标志决定是否推送子模块
 		if ((flags & (TRANSPORT_RECURSE_SUBMODULES_ON_DEMAND |
 			      TRANSPORT_RECURSE_SUBMODULES_ONLY)) &&
 		    !is_bare_repository()) {
@@ -1346,7 +1433,7 @@ int transport_push(struct repository *r,
 			oid_array_clear(&commits);
 			trace2_region_leave("transport_push", "push_submodules", r);
 		}
-
+		//子模块检查.检查子模块是否需要推送,确保所有必要的子模块都被推送
 		if (((flags & TRANSPORT_RECURSE_SUBMODULES_CHECK) ||
 		     ((flags & (TRANSPORT_RECURSE_SUBMODULES_ON_DEMAND |
 				TRANSPORT_RECURSE_SUBMODULES_ONLY)) &&
@@ -1373,13 +1460,14 @@ int transport_push(struct repository *r,
 			oid_array_clear(&commits);
 			trace2_region_leave("transport_push", "check_submodules", r);
 		}
-
+		// 核心推送执行
 		if (!(flags & TRANSPORT_RECURSE_SUBMODULES_ONLY)) {
 			trace2_region_enter("transport_push", "push_refs", r);
 			push_ret = transport->vtable->push_refs(transport, remote_refs, flags);
 			trace2_region_leave("transport_push", "push_refs", r);
 		} else
 			push_ret = 0;
+		//结果处理和状态更新
 		err = push_had_errors(remote_refs);
 		ret = push_ret | err;
 
@@ -1387,17 +1475,17 @@ int transport_push(struct repository *r,
 			transport_print_push_status(transport->url, remote_refs,
 					verbose | porcelain, porcelain,
 					reject_reasons);
-
+		//上游分支设置
 		if (flags & TRANSPORT_PUSH_SET_UPSTREAM)
 			set_upstreams(transport, remote_refs, pretend);
-
+		// 跟踪引用更新.更新远程引用到本地跟踪引用
 		if (!(flags & (TRANSPORT_PUSH_DRY_RUN |
 			       TRANSPORT_RECURSE_SUBMODULES_ONLY))) {
 			struct ref *ref;
 			for (ref = remote_refs; ref; ref = ref->next)
 				transport_update_tracking_ref(transport->remote, ref, verbose);
 		}
-
+		//最终状态输出
 		if (porcelain && !push_ret)
 			puts("Done");
 		else if (!quiet && !ret && !transport_refs_pushed(remote_refs))

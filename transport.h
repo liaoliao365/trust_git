@@ -145,6 +145,8 @@ struct transport {
 #define TRANSPORT_RECURSE_SUBMODULES_ONLY	(1<<15)
 #define TRANSPORT_PUSH_FORCE_IF_INCLUDES	(1<<16)
 
+#define TRANSPORT_PUSH_TRUST_CHAIN	(1<<17)
+
 int transport_summary_width(const struct ref *refs);
 
 /* Returns a transport suitable for the url */

@@ -487,19 +487,19 @@ int send_pack(struct send_pack_args *args,
 	struct async demux;
 	const char *push_cert_nonce = NULL;
 	struct packet_reader reader;
-
+	// 检查是否有远程引用
 	if (!remote_refs) {
 		fprintf(stderr, "No refs in common and none specified; doing nothing.\n"
 			"Perhaps you should specify a branch.\n");
 		return 0;
 	}
-
+	//推送协商和配置
 	git_config_get_bool("push.negotiate", &push_negotiate);
 	if (push_negotiate)
 		get_commons_through_negotiation(args->url, remote_refs, &commons);
 
 	git_config_get_bool("transfer.advertisesid", &advertise_sid);
-
+	// 服务器能力检测
 	/* Does the other end support the reporting? */
 	if (server_supports("report-status-v2"))
 		status_report = 2;
@@ -526,7 +526,8 @@ int send_pack(struct send_pack_args *args,
 
 	if (!server_supports_hash(the_hash_algo->name, &object_format_supported))
 		die(_("the receiving end does not support this repository's hash algorithm"));
-
+	
+	//推送证书处理
 	if (args->push_cert != SEND_PACK_PUSH_CERT_NEVER) {
 		int len;
 		push_cert_nonce = server_feature_value("push-cert", &len);
@@ -541,7 +542,7 @@ int send_pack(struct send_pack_args *args,
 				  " push"));
 		}
 	}
-
+	// 检查是否支持原子推送
 	if (args->atomic && !atomic_supported)
 		die(_("the receiving end does not support --atomic push"));
 
@@ -549,9 +550,10 @@ int send_pack(struct send_pack_args *args,
 
 	if (args->push_options && !push_options_supported)
 		die(_("the receiving end does not support push options"));
-
+	// 检查是否支持推送选项	
 	use_push_options = push_options_supported && args->push_options;
-
+	// 构建能力字符串 包含状态报告、边带传输、原子推送等能力
+	// 添加哈希算法、代理信息、会话ID等
 	if (status_report == 1)
 		strbuf_addstr(&cap_buf, " report-status");
 	else if (status_report == 2)
@@ -576,6 +578,7 @@ int send_pack(struct send_pack_args *args,
 	 * send-pack machinery that set_ref_status_for_push() cannot
 	 * set this bit for us???
 	 */
+	// 检查是否支持删除引用
 	for (ref = remote_refs; ref; ref = ref->next)
 		if (ref->deletion && !allow_deleting_refs)
 			ref->status = REF_STATUS_REJECT_NODELETE;
@@ -584,6 +587,7 @@ int send_pack(struct send_pack_args *args,
 	 * Clear the status for each ref and see if we need to send
 	 * the pack data.
 	 */
+	// 检查每个引用的推送状态
 	for (ref = remote_refs; ref; ref = ref->next) {
 		switch (check_to_send_update(ref, args)) {
 		case 0: /* no error */
@@ -614,17 +618,21 @@ int send_pack(struct send_pack_args *args,
 		else
 			ref->status = REF_STATUS_EXPECTING_REPORT;
 	}
-
+	// 广告浅层 grafts
 	if (!args->dry_run)
 		advertise_shallow_grafts_buf(&req_buf);
 
 	/*
 	 * Finally, tell the other end!
 	 */
+	// 将推送的数据写入缓冲区	
+	// !args->dry_run：不是干运行模式，且有推送证书随机数
 	if (!args->dry_run && push_cert_nonce)
+		//生成推送证书：创建包含推送信息的证书，该函数内部已经把数据写入了缓冲区
 		cmds_sent = generate_push_cert(&req_buf, remote_refs, args,
 					       cap_buf.buf, push_cert_nonce);
-	else if (!args->dry_run)
+	else if (!args->dry_run)// 推送证书未启用，发送推送命令
+		// 遍历所有远程引用，检查是否需要发送更新，将更新的数据写入缓冲区
 		for (ref = remote_refs; ref; ref = ref->next) {
 			char *old_hex, *new_hex;
 
@@ -644,27 +652,34 @@ int send_pack(struct send_pack_args *args,
 						 old_hex, new_hex, ref->name);
 			}
 		}
-
+	// 将推送选项写入缓冲区（用户通过 -o 参数指定的额外信息）
 	if (use_push_options) {
 		struct string_list_item *item;
 
 		packet_buf_flush(&req_buf);
+		// 所有推送选项打包到一个网络包中，先写到缓冲区
 		for_each_string_list_item(item, args->push_options)
 			packet_buf_write(&req_buf, "%s", item->string);
 	}
-
+	// 缓冲区数据 发送 
+	// 根据不同的 RPC 模式选择不同的发送方式.
+	// 无状态RPC: 使用 send_sideband 发送数据，适合 HTTP 等无状态协议
 	if (args->stateless_rpc) {
 		if (!args->dry_run && (cmds_sent || is_repository_shallow(the_repository))) {
+			//缓冲区数据整理，发送就绪
 			packet_buf_flush(&req_buf);
+			//发送到网络
 			send_sideband(out, -1, req_buf.buf, req_buf.len, LARGE_PACKET_MAX);
 		}
+	// 有状态RPC: 使用 write_or_die 和 packet_flush，适合 SSH 等有状态协议
 	} else {
 		write_or_die(out, req_buf.buf, req_buf.len);
+		//Git协议要求每个请求后发送flush包，告诉接收方数据包已经结束
 		packet_flush(out);
 	}
 	strbuf_release(&req_buf);
 	strbuf_release(&cap_buf);
-
+	// 如果使用边带传输，启动一个子进程来处理数据包的解复用，分离不同类型的数据
 	if (use_sideband && cmds_sent) {
 		memset(&demux, 0, sizeof(demux));
 		demux.proc = sideband_demux;
@@ -675,12 +690,13 @@ int send_pack(struct send_pack_args *args,
 			die("send-pack: unable to fork off sideband demultiplexer");
 		in = demux.out;
 	}
-
+	// 数据包读取器初始化
 	packet_reader_init(&reader, in, NULL, 0,
 			   PACKET_READ_CHOMP_NEWLINE |
 			   PACKET_READ_DIE_ON_ERR_PACKET);
-
+	// 发送包数据
 	if (need_pack_data && cmds_sent) {
+		//	对象打包：将需要推送的Git对象（提交、树、文件等）打包
 		if (pack_objects(out, remote_refs, extra_have, &commons, args) < 0) {
 			if (args->stateless_rpc)
 				close(out);
@@ -709,7 +725,7 @@ int send_pack(struct send_pack_args *args,
 	}
 	if (args->stateless_rpc && cmds_sent)
 		packet_flush(out);
-
+	// 接收推送状态
 	if (status_report && cmds_sent)
 		ret = receive_status(&reader, remote_refs);
 	else
@@ -724,7 +740,7 @@ int send_pack(struct send_pack_args *args,
 			ret = -1;
 		}
 	}
-
+	// 结果验证和返回
 	if (ret < 0)
 		return ret;
 

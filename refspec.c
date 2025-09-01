@@ -265,9 +265,10 @@ void refspec_ref_prefixes(const struct refspec *rs,
 	for (i = 0; i < rs->nr; i++) {
 		const struct refspec_item *item = &rs->items[i];
 		const char *prefix = NULL;
-
+		//跳过无效项
 		if (item->exact_sha1 || item->negative)
 			continue;
+		//确定前缀来源
 		if (rs->fetch == REFSPEC_FETCH)
 			prefix = item->src;
 		else if (item->dst)
@@ -277,12 +278,17 @@ void refspec_ref_prefixes(const struct refspec *rs,
 
 		if (!prefix)
 			continue;
-
+		//处理模式引用
+		// 引用规范: "refs/heads/*:refs/remotes/origin/*"
+		// 前缀: "refs/heads/" (截取到 * 之前的部分)
 		if (item->pattern) {
 			const char *glob = strchr(prefix, '*');
 			strvec_pushf(ref_prefixes, "%.*s",
 				     (int)(glob - prefix),
 				     prefix);
+		//处理普通引用
+		//引用规范: "main:main"
+		//前缀: "refs/heads/main"
 		} else {
 			expand_ref_prefix(ref_prefixes, prefix);
 		}

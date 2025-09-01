@@ -1841,32 +1841,38 @@ static void warn_if_skipped_connectivity_check(struct command *commands,
 		BUG("connectivity check skipped???");
 }
 
+//struct command *commands 是一个链表结构，每个节点代表一个要推送的引用
 static void execute_commands_non_atomic(struct command *commands,
 					struct shallow_info *si)
-{
+{	
 	struct command *cmd;
 	struct strbuf err = STRBUF_INIT;
 
 	for (cmd = commands; cmd; cmd = cmd->next) {
+		//!should_process_cmd(cmd): 命令不应该被处理（如已标记为错误）
+		//cmd->run_proc_receive: 命令需要运行 proc-receive 钩子
+		//钩子可能修改命令
 		if (!should_process_cmd(cmd) || cmd->run_proc_receive)
 			continue;
-
+		//事务创建
 		transaction = ref_transaction_begin(&err);
+		//如果事务创建失败，标记命令为错误并继续下一个
 		if (!transaction) {
 			rp_error("%s", err.buf);
 			strbuf_reset(&err);
 			cmd->error_string = "transaction failed to start";
 			continue;
 		}
-
+		//引用更新
 		cmd->error_string = update(cmd, si);
-
+		//事务提交
 		if (!cmd->error_string
 		    && ref_transaction_commit(transaction, &err)) {
 			rp_error("%s", err.buf);
 			strbuf_reset(&err);
 			cmd->error_string = "failed to update ref";
 		}
+		//资源清理
 		ref_transaction_free(transaction);
 	}
 	strbuf_release(&err);
@@ -1958,6 +1964,7 @@ static void execute_commands(struct command *commands,
 	 * Try to find commands that have special prefix in their reference names,
 	 * and mark them to run an external "proc-receive" hook later.
 	 */
+	//跟后面的区别是？
 	if (proc_receive_ref) {
 		for (cmd = commands; cmd; cmd = cmd->next) {
 			if (!should_process_cmd(cmd))
@@ -1990,12 +1997,12 @@ static void execute_commands(struct command *commands,
 		return;
 	}
 	tmp_objdir = NULL;
-
+	//确保推送的引用不会与现有的别名引用产生冲突或破坏引用结构。
 	check_aliased_updates(commands);
-
+	//先释放旧的HEAD内存，再分配新内存
 	free(head_name_to_free);
 	head_name = head_name_to_free = resolve_refdup("HEAD", 0, NULL, NULL);
-
+	//proc-receive 钩子执行
 	if (run_proc_receive &&
 	    run_proc_receive_hook(commands, push_options))
 		for (cmd = commands; cmd; cmd = cmd->next)
@@ -2008,7 +2015,7 @@ static void execute_commands(struct command *commands,
 		execute_commands_atomic(commands, si);
 	else
 		execute_commands_non_atomic(commands, si);
-
+	//浅克隆检查：帮助发现和预防可能的数据不一致问题。
 	if (shallow_update)
 		warn_if_skipped_connectivity_check(commands, si);
 }
@@ -2469,12 +2476,12 @@ static int delete_only(struct command *commands)
 
 int cmd_receive_pack(int argc, const char **argv, const char *prefix)
 {
-	int advertise_refs = 0;
-	struct command *commands;
-	struct oid_array shallow = OID_ARRAY_INIT;
-	struct oid_array ref = OID_ARRAY_INIT;
-	struct shallow_info si;
-	struct packet_reader reader;
+	int advertise_refs = 0;//不输出引用信息
+	struct command *commands;//存储从客户端接收的推送命令
+	struct oid_array shallow = OID_ARRAY_INIT;//浅克隆相关的 OID 数组
+	struct oid_array ref = OID_ARRAY_INIT;//引用更新相关的 OID 数组
+	struct shallow_info si;//浅克隆信息结构
+	struct packet_reader reader;//数据包读取器
 
 	struct option options[] = {
 		OPT__QUIET(&quiet, N_("quiet")),
@@ -2486,7 +2493,7 @@ int cmd_receive_pack(int argc, const char **argv, const char *prefix)
 	};
 
 	packet_trace_identity("receive-pack");
-
+	//参数验证和路径设置
 	argc = parse_options(argc, argv, prefix, options, receive_pack_usage, 0);
 
 	if (argc > 1)
@@ -2496,11 +2503,13 @@ int cmd_receive_pack(int argc, const char **argv, const char *prefix)
 
 	service_dir = argv[0];
 
+	//仓库初始化和配置
+	//设置 Git 的执行路径到 PATH 环境变量中，确保能找到 Git 相关的可执行文件。
 	setup_path();
-
+	// 进入并验证仓库
 	if (!enter_repo(service_dir, 0))
 		die("'%s' does not appear to be a git repository", service_dir);
-
+	//加载 Git 配置
 	git_config(receive_pack_config, NULL);
 	if (cert_nonce_seed)
 		push_cert_nonce = prepare_push_cert_nonce(service_dir, time(NULL));
@@ -2537,12 +2546,26 @@ int cmd_receive_pack(int argc, const char **argv, const char *prefix)
 	}
 	if (advertise_refs)
 		return 0;
-
+	//数据包读取器初始化
 	packet_reader_init(&reader, 0, NULL, 0,
 			   PACKET_READ_CHOMP_NEWLINE |
 			   PACKET_READ_DIE_ON_ERR_PACKET);
-
+	// 1. 读取推送命令
 	if ((commands = read_head_info(&reader, &shallow)) != NULL) {
+
+		FILE *fp = fopen("/home/lele/gittest/owner-local/debug.log", "a");
+		if (fp) {
+			//打印commands
+			struct command *cmd;
+			for (cmd = commands; cmd; cmd = cmd->next) {
+				fprintf(fp, "ref_name: %s ", cmd->ref_name);
+				fprintf(fp,"old_oid: %s ", oid_to_hex(&cmd->old_oid));
+				fprintf(fp,"new_oid: %s\n", oid_to_hex(&cmd->new_oid));
+			}
+			fflush(fp);
+			fclose(fp);
+		}
+		
 		const char *unpack_status = NULL;
 		struct string_list push_options = STRING_LIST_INIT_DUP;
 
@@ -2558,14 +2581,20 @@ int cmd_receive_pack(int argc, const char **argv, const char *prefix)
 		if (!si.nr_ours && !si.nr_theirs)
 			shallow_update = 0;
 		if (!delete_only(commands)) {
+			// 2. 存储对象数据
 			unpack_status = unpack_with_sideband(&si);
 			update_shallow_info(commands, &si, &ref);
 		}
 		use_keepalive = KEEPALIVE_ALWAYS;
+		// 3. 执行引用更新
+		//pre-receive 钩子在 execute_commands 函数中被调用
 		execute_commands(commands, unpack_status, &si,
 				 &push_options);
+
 		if (pack_lockfile)
 			unlink_or_warn(pack_lockfile);
+		
+		//状态报告和post-receive钩子执行
 		if (report_status_v2)
 			report_v2(commands, unpack_status);
 		else if (report_status)
@@ -2574,6 +2603,7 @@ int cmd_receive_pack(int argc, const char **argv, const char *prefix)
 				 &push_options);
 		run_update_post_hook(commands);
 		string_list_clear(&push_options, 0);
+		//自动维护操作
 		if (auto_gc) {
 			const char *argv_gc_auto[] = {
 				"gc", "--auto", "--quiet", NULL,
@@ -2596,6 +2626,7 @@ int cmd_receive_pack(int argc, const char **argv, const char *prefix)
 			update_server_info(0);
 		clear_shallow_info(&si);
 	}
+	//清理和资源释放
 	if (use_sideband)
 		packet_flush(1);
 	oid_array_clear(&shallow);

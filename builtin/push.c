@@ -344,6 +344,7 @@ static int push_with_options(struct transport *transport, struct refspec *rs,
 				     TRANS_OPT_RECEIVEPACK, receivepack);
 	transport_set_option(transport, TRANS_OPT_THIN, thin ? "yes" : NULL);
 
+	//如果指定了CAS选项，则设置CAS选项
 	if (!is_empty_cas(&cas)) {
 		if (!transport->smart_options)
 			die("underlying transport does not support --%s option",
@@ -351,23 +352,30 @@ static int push_with_options(struct transport *transport, struct refspec *rs,
 		transport->smart_options->cas = &cas;
 	}
 
+	//执行推送操作
 	if (verbosity > 0)
 		fprintf(stderr, _("Pushing to %s\n"), anon_url);
+	//进入Git的trace2性能跟踪系统，用于性能分析和调试，可以测量推送操作的耗时
 	trace2_region_enter("push", "transport_push", the_repository);
 	err = transport_push(the_repository, transport,
 			     rs, flags, &reject_reasons);
 	trace2_region_leave("push", "transport_push", the_repository);
+
+	//推送失败错误处理
 	if (err != 0) {
 		fprintf(stderr, "%s", push_get_color(PUSH_COLOR_ERROR));
 		error(_("failed to push some refs to '%s'"), anon_url);
 		fprintf(stderr, "%s", push_get_color(PUSH_COLOR_RESET));
 	}
-
+	//清理操作可能改变err值
 	err |= transport_disconnect(transport);
 	free(anon_url);
+
+	//如果推送且清理成功，则返回0。
 	if (!err)
 		return 0;
 
+	//推送拒绝原因分析和建议
 	if (reject_reasons & REJECT_NON_FF_HEAD) {
 		advise_pull_before_push();
 	} else if (reject_reasons & REJECT_NON_FF_OTHER) {
@@ -382,6 +390,7 @@ static int push_with_options(struct transport *transport, struct refspec *rs,
 		advise_ref_needs_update();
 	}
 
+	//如果推送成功，清理操作失败，会返回错误，但是感觉用户不知道是什么错误啊
 	return 1;
 }
 
@@ -392,11 +401,12 @@ static int do_push(int flags,
 	int i, errs;
 	const char **url;
 	int url_nr;
+	//rs是在cmd_push函数中填充的,set_refspecs(argv + 1, argc - 1, repo);
 	struct refspec *push_refspec = &rs;
-
+	//推送选项标志设置
 	if (push_options->nr)
 		flags |= TRANSPORT_PUSH_OPTIONS;
-
+	//引用规格确定逻辑，&rs是命令行的规则，remote->push是远程仓库配置的push引用规格，如果都没有则使用默认引用规格（根据push.default配置）
 	if (!push_refspec->nr && !(flags & TRANSPORT_PUSH_ALL)) {
 		if (remote->push.nr) {
 			push_refspec = &remote->push;
@@ -404,8 +414,9 @@ static int do_push(int flags,
 			setup_default_push_refspecs(remote);
 	}
 	errs = 0;
+	//URL数量获取
 	url_nr = push_url_of_remote(remote, &url);
-	if (url_nr) {
+	if (url_nr) {//多URL推送处理
 		for (i = 0; i < url_nr; i++) {
 			struct transport *transport =
 				transport_get(remote, url[i]);
@@ -414,7 +425,7 @@ static int do_push(int flags,
 			if (push_with_options(transport, push_refspec, flags))
 				errs++;
 		}
-	} else {
+	} else {//单URL推送处理
 		struct transport *transport =
 			transport_get(remote, NULL);
 		if (flags & TRANSPORT_PUSH_OPTIONS)
@@ -529,24 +540,27 @@ static int git_push_config(const char *k, const char *v, void *cb)
 
 int cmd_push(int argc, const char **argv, const char *prefix)
 {
-	int flags = 0;
-	int tags = 0;
-	int push_cert = -1;
-	int rc;
-	const char *repo = NULL;	/* default repository */
-	struct string_list push_options_cmdline = STRING_LIST_INIT_DUP;
-	struct string_list *push_options;
+	int flags = 0;// 推送标志位
+	int tags = 0;// 是否推送标签
+	int trust_chain = 0;// 是否推送信任链
+	int push_cert = -1;// 推送证书设置
+	int rc;// 返回值
+	const char *repo = NULL;	/* default repository */// 目标仓库名称
+	struct string_list push_options_cmdline = STRING_LIST_INIT_DUP;// 命令行推送选项
+	struct string_list *push_options;// 最终使用的推送选项
 	const struct string_list_item *item;
-	struct remote *remote;
+	struct remote *remote;// 远程仓库对象
 
 	struct option options[] = {
 		OPT__VERBOSITY(&verbosity),
 		OPT_STRING( 0 , "repo", &repo, N_("repository"), N_("repository")),
+		//把命令行选项 --all 映射到一个位标志（bit flag）。
 		OPT_BIT( 0 , "all", &flags, N_("push all refs"), TRANSPORT_PUSH_ALL),
 		OPT_BIT( 0 , "mirror", &flags, N_("mirror all refs"),
 			    (TRANSPORT_PUSH_MIRROR|TRANSPORT_PUSH_FORCE)),
 		OPT_BOOL('d', "delete", &deleterefs, N_("delete refs")),
 		OPT_BOOL( 0 , "tags", &tags, N_("push tags (can't be used with --all or --mirror)")),
+		OPT_BIT( 0 , "trust_chain", &flags, N_("log on trust chain"), TRANSPORT_PUSH_TRUST_CHAIN),
 		OPT_BIT('n' , "dry-run", &flags, N_("dry run"), TRANSPORT_PUSH_DRY_RUN),
 		OPT_BIT( 0,  "porcelain", &flags, N_("machine-readable output"), TRANSPORT_PUSH_PORCELAIN),
 		OPT_BIT('f', "force", &flags, N_("force updates"), TRANSPORT_PUSH_FORCE),
@@ -580,35 +594,57 @@ int cmd_push(int argc, const char **argv, const char *prefix)
 		OPT_END()
 	};
 
-	packet_trace_identity("push");
-	git_config(git_push_config, &flags);
+	packet_trace_identity("push"); // 设置数据包跟踪标识
+	git_config(git_push_config, &flags); // 加载Git配置
+	//解析命令行选项
 	argc = parse_options(argc, argv, prefix, options, push_usage, 0);
 	push_options = (push_options_cmdline.nr
-		? &push_options_cmdline
-		: &push_options_config);
+		? &push_options_cmdline // 优先使用命令行选项
+		: &push_options_config); // 回退到配置文件选项
+	//推送证书标志设置
 	set_push_cert_flags(&flags, push_cert);
-
+	
+	//选项兼容性验证 
+	// --delete 不能与 --all、--mirror、--tags 同时使用
+	// --delete 必须指定要删除的引用
 	if (deleterefs && (tags || (flags & (TRANSPORT_PUSH_ALL | TRANSPORT_PUSH_MIRROR))))
 		die(_("--delete is incompatible with --all, --mirror and --tags"));
 	if (deleterefs && argc < 2)
 		die(_("--delete doesn't make sense without any refs"));
-
+	//===================
+	//--trust_chain不能和--all、--mirror、--tags 同时使用
+	if ((flags & TRANSPORT_PUSH_TRUST_CHAIN) && (tags || (flags & (TRANSPORT_PUSH_ALL | TRANSPORT_PUSH_MIRROR))))
+		die(_("--trust_chain is incompatible with --all, --mirror and --tags"));
+	//===================
+	
+	//子模块递归标志设置
 	if (recurse_submodules == RECURSE_SUBMODULES_CHECK)
 		flags |= TRANSPORT_RECURSE_SUBMODULES_CHECK;
 	else if (recurse_submodules == RECURSE_SUBMODULES_ON_DEMAND)
 		flags |= TRANSPORT_RECURSE_SUBMODULES_ON_DEMAND;
 	else if (recurse_submodules == RECURSE_SUBMODULES_ONLY)
 		flags |= TRANSPORT_RECURSE_SUBMODULES_ONLY;
-
+	
+	// 如果指定了--tags选项，则推送所有标签
 	if (tags)
 		refspec_append(&rs, "refs/tags/*");
+	//===================
+	// 如果指定了--trust_chain选项，则需要将trustchain引用也返回进行检查
+	// 如果是精准匹配"refs/trustchain/head",本地没有这个引用的话，后面check_push_refs会返回错误
+	// 如果是通配符匹配，本地没有这个引用的话，后面check_push_refs则不会返回错误
+	if (flags & TRANSPORT_PUSH_TRUST_CHAIN)
+		refspec_append(&rs, "refs/trustchain/head:refs/trustchain/head");
+	//===================
 
+	// 如果指定了仓库名称，则设置为远程仓库名称
 	if (argc > 0) {
 		repo = argv[0];
 		set_refspecs(argv + 1, argc - 1, repo);
 	}
 
+	// 获取远程仓库对象，只是一些本地配置
 	remote = pushremote_get(repo);
+	// 如果远程仓库对象为空，则提示错误
 	if (!remote) {
 		if (repo)
 			die(_("bad repository '%s'"), repo);
@@ -621,33 +657,37 @@ int cmd_push(int argc, const char **argv, const char *prefix)
 		    "\n"
 		    "    git push <name>\n"));
 	}
-
+	// 如果远程仓库对象为镜像仓库，则设置推送标志位
 	if (remote->mirror)
 		flags |= (TRANSPORT_PUSH_MIRROR|TRANSPORT_PUSH_FORCE);
-
+	// 如果指定了--all选项，则推送所有引用，检测--all的选项冲突
 	if (flags & TRANSPORT_PUSH_ALL) {
 		if (tags)
 			die(_("--all and --tags are incompatible"));
 		if (argc >= 2)
 			die(_("--all can't be combined with refspecs"));
 	}
+	// 如果远程仓库对象为镜像仓库，则设置推送标志位，检测--mirror的选项冲突
 	if (flags & TRANSPORT_PUSH_MIRROR) {
 		if (tags)
 			die(_("--mirror and --tags are incompatible"));
 		if (argc >= 2)
 			die(_("--mirror can't be combined with refspecs"));
 	}
+	// 如果指定了--all和--mirror选项，则提示错误
 	if ((flags & TRANSPORT_PUSH_ALL) && (flags & TRANSPORT_PUSH_MIRROR))
 		die(_("--all and --mirror are incompatible"));
-
+	// 如果指定了--force-if-includes选项，则设置CAS选项
 	if (!is_empty_cas(&cas) && (flags & TRANSPORT_PUSH_FORCE_IF_INCLUDES))
 		cas.use_force_if_includes = 1;
-
+	// 如果推送选项包含换行符，则提示错误
 	for_each_string_list_item(item, push_options)
 		if (strchr(item->string, '\n'))
 			die(_("push options must not have new line characters"));
 
+	// 执行推送操作
 	rc = do_push(flags, push_options, remote);
+	// 清空推送选项
 	string_list_clear(&push_options_cmdline, 0);
 	string_list_clear(&push_options_config, 0);
 	if (rc == -1)

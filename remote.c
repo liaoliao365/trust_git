@@ -1457,7 +1457,7 @@ int check_push_refs(struct ref *src, struct refspec *rs)
  * forced) in elements of "dst". The function may add new elements to
  * dst (e.g. pushing to a new branch, done in match_explicit_refs).
  */
-int match_push_refs(struct ref *src, struct ref **dst,
+int  match_push_refs(struct ref *src, struct ref **dst,
 		    struct refspec *rs, int flags)
 {
 	int send_all = flags & MATCH_REFS_ALL;
@@ -1468,9 +1468,10 @@ int match_push_refs(struct ref *src, struct ref **dst,
 	struct string_list dst_ref_index = STRING_LIST_INIT_NODUP;
 
 	/* If no refspec is provided, use the default ":" */
+	//":"会匹配所有本地引用到同名的远程引用
 	if (!rs->nr)
 		refspec_append(rs, ":");
-
+	//只处理显式的 refspec 精确匹配
 	errs = match_explicit_refs(src, *dst, &dst_tail, rs);
 
 	/* pick the remainder */
@@ -1479,7 +1480,7 @@ int match_push_refs(struct ref *src, struct ref **dst,
 		struct ref *dst_peer;
 		const struct refspec_item *pat = NULL;
 		char *dst_name;
-
+		//不处理显式的 refspec，处理模式匹配，跳过负向 refspec
 		dst_name = get_ref_match(rs, ref, send_mirror, FROM_SRC, &pat);
 		if (!dst_name)
 			continue;
@@ -1557,14 +1558,17 @@ void set_ref_status_for_push(struct ref *remote_refs, int send_mirror,
 	for (ref = remote_refs; ref; ref = ref->next) {
 		int force_ref_update = ref->force || force_update;
 		int reject_reason = 0;
-
+		//如果有对应的本地引用，复制新的对象ID，peer_ref：对应的本地引用
 		if (ref->peer_ref)
+			//new_oid 要推送的新对象ID
 			oidcpy(&ref->new_oid, &ref->peer_ref->new_oid);
+		//如果不是镜像模式且没有本地引用，跳过处理
 		else if (!send_mirror)
 			continue;
-
+		//检测是否为删除操作
 		ref->deletion = is_null_oid(&ref->new_oid);
 		if (!ref->deletion &&
+			//old_oid远程引用当前指向的对象ID
 			oideq(&ref->old_oid, &ref->new_oid)) {
 			ref->status = REF_STATUS_UPTODATE;
 			continue;
@@ -1583,6 +1587,8 @@ void set_ref_status_for_push(struct ref *remote_refs, int send_mirror,
 		 * from any reflog entry of its local ref indicating a
 		 * possible update since checkout; reject the push.
 		 */
+		//检查远程引用是否与期望值匹配，expect_old_sha1布尔值（非零表示启用，零表示不启用）
+		//用户输入 --force-with-lease参数才会启用
 		if (ref->expect_old_sha1) {
 			if (!oideq(&ref->old_oid, &ref->old_oid_expect))
 				reject_reason = REF_STATUS_REJECT_STALE;
@@ -1622,11 +1628,17 @@ void set_ref_status_for_push(struct ref *remote_refs, int send_mirror,
 		if (!reject_reason && !ref->deletion && !is_null_oid(&ref->old_oid)) {
 			if (starts_with(ref->name, "refs/tags/"))
 				reject_reason = REF_STATUS_REJECT_ALREADY_EXISTS;
+			else if (starts_with(ref->name, "refs/trustchain/"))
+				if (!oideq(&ref->old_oid, &ref->new_oid))
+					reject_reason = REF_STATUS_REJECT_ALREADY_EXISTS;
+			//远程引用的旧对象ID是否存在于本地对象数据库中
 			else if (!has_object_file(&ref->old_oid))
 				reject_reason = REF_STATUS_REJECT_FETCH_FIRST;
+			//提交引用有效性检查
 			else if (!lookup_commit_reference_gently(the_repository, &ref->old_oid, 1) ||
 				 !lookup_commit_reference_gently(the_repository, &ref->new_oid, 1))
 				reject_reason = REF_STATUS_REJECT_NEEDS_FORCE;
+			//新提交是否是旧提交的后代（快进关系）
 			else if (!ref_newer(&ref->new_oid, &ref->old_oid))
 				reject_reason = REF_STATUS_REJECT_NONFASTFORWARD;
 		}
