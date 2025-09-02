@@ -799,6 +799,16 @@ void transport_print_push_status(const char *dest, struct ref *refs,
 
 static int git_transport_push(struct transport *transport, struct ref *remote_refs, int flags)
 {
+	// die("git_transport_push!!!!!!!!!!!!!!!!!!");
+	// fprintf(stderr, "=== GIT_TRANSPORT_PUSH CALLED ===\n");
+    // fprintf(stderr, "DEBUG: flags = 0x%x\n", flags);
+    // fprintf(stderr, "DEBUG: TRANSPORT_PUSH_TRUST_CHAIN = 0x%x\n", TRANSPORT_PUSH_TRUST_CHAIN);
+    // fprintf(stderr, "DEBUG: flags & TRANSPORT_PUSH_TRUST_CHAIN = 0x%x\n", flags & TRANSPORT_PUSH_TRUST_CHAIN);
+  
+	// printf("DEBUG: git_transport_push flags = 0x%x\n", flags);
+	// printf("DEBUG: TRANSPORT_PUSH_TRUST_CHAIN = 0x%x\n", TRANSPORT_PUSH_TRUST_CHAIN);
+	// printf("DEBUG: flags & TRANSPORT_PUSH_TRUST_CHAIN = 0x%x\n", flags & TRANSPORT_PUSH_TRUST_CHAIN);
+
 	struct git_transport_data *data = transport->data;
 	struct send_pack_args args;
 	int ret = 0;
@@ -823,7 +833,11 @@ static int git_transport_push(struct transport *transport, struct ref *remote_re
 	args.porcelain = !!(flags & TRANSPORT_PUSH_PORCELAIN);
 	args.atomic = !!(flags & TRANSPORT_PUSH_ATOMIC);
 	args.push_options = transport->push_options;
+	args.trust_chain = !!(flags & TRANSPORT_PUSH_TRUST_CHAIN);
 	args.url = transport->url;
+
+	// if(args.trust_chain)
+	// 	die(_("args.trust_chain is true!!!!!!!"));
 
 	if (flags & TRANSPORT_PUSH_CERT_ALWAYS)
 		args.push_cert = SEND_PACK_PUSH_CERT_ALWAYS;
@@ -1269,6 +1283,11 @@ int transport_push(struct repository *r,
 		   struct refspec *rs, int flags,
 		   unsigned int *reject_reasons)
 {
+
+printf("DEBUG: flags = 0x%x\n", flags);
+printf("DEBUG: TRANSPORT_PUSH_TRUST_CHAIN = 0x%x\n", TRANSPORT_PUSH_TRUST_CHAIN);
+printf("DEBUG: flags & TRANSPORT_PUSH_TRUST_CHAIN = 0x%x\n", flags & TRANSPORT_PUSH_TRUST_CHAIN);
+
 	*reject_reasons = 0;
 
 	if (transport_color_config() < 0)

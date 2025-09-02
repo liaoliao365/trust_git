@@ -55,6 +55,7 @@ static int receive_unpack_limit = -1;
 static int transfer_unpack_limit = -1;
 static int advertise_atomic_push = 1;
 static int advertise_push_options;
+static int advertise_trust_chain;
 static int advertise_sid;
 static int unpack_limit = 100;
 static off_t max_input_size;
@@ -63,6 +64,7 @@ static int report_status_v2;
 static int use_sideband;
 static int use_atomic;
 static int use_push_options;
+static int use_trust_chain;
 static int quiet;
 static int prefer_ofs_delta = 1;
 static int auto_update_server_info;
@@ -237,6 +239,11 @@ static int receive_pack_config(const char *var, const char *value, void *cb)
 		return 0;
 	}
 
+	if (strcmp(var, "receive.advertisetrustchain") == 0) {
+		advertise_trust_chain = git_config_bool(var, value);
+		return 0;
+	}
+
 	if (strcmp(var, "receive.keepalive") == 0) {
 		keepalive_in_sec = git_config_int(var, value);
 		return 0;
@@ -279,6 +286,8 @@ static void show_ref(const char *path, const struct object_id *oid)
 			strbuf_addf(&cap, " push-cert=%s", push_cert_nonce);
 		if (advertise_push_options)
 			strbuf_addstr(&cap, " push-options");
+		if (advertise_trust_chain)
+			strbuf_addstr(&cap, " trust-chain");
 		if (advertise_sid)
 			strbuf_addf(&cap, " session-id=%s", trace2_session_id());
 		strbuf_addf(&cap, " object-format=%s", the_hash_algo->name);
@@ -2107,6 +2116,9 @@ static struct command *read_head_info(struct packet_reader *reader,
 			if (advertise_push_options
 			    && parse_feature_request(feature_list, "push-options"))
 				use_push_options = 1;
+			if (advertise_trust_chain
+			    && parse_feature_request(feature_list, "trust-chain"))
+				use_trust_chain = 1;
 			hash = parse_feature_value(feature_list, "object-format", &len, NULL);
 			if (!hash) {
 				hash = hash_algos[GIT_HASH_SHA1].name;
@@ -2474,6 +2486,25 @@ static int delete_only(struct command *commands)
 	return 1;
 }
 
+int check_trustchain_push_options(struct string_list *push_options)
+{
+	struct string_list_item *item;
+	for_each_string_list_item (item, push_options) {
+		if (strcmp(item->string, "trust_chain=yes") == 0) {
+			return 1;
+		}
+	}
+	return 0;
+}
+
+void read_trustchain_commit_msg(struct packet_reader *reader, struct strbuf *commit_msg)
+{
+	if (packet_reader_read(reader) != PACKET_READ_NORMAL)
+		die("read trustchain commit msg error");
+
+	strbuf_addstr(commit_msg, reader->line);
+}
+
 int cmd_receive_pack(int argc, const char **argv, const char *prefix)
 {
 	int advertise_refs = 0;//不输出引用信息
@@ -2552,39 +2583,95 @@ int cmd_receive_pack(int argc, const char **argv, const char *prefix)
 			   PACKET_READ_DIE_ON_ERR_PACKET);
 	// 1. 读取推送命令
 	if ((commands = read_head_info(&reader, &shallow)) != NULL) {
+		//=====================调试代码========================
+		//打印调试数据到文件中
+		// FILE *fp = fopen("/home/lele/gittest/owner-local/debug.log", "a");
+		// if (fp) {
+		// 	//打印commands
+		// 	struct command *cmd;
+		// 	for (cmd = commands; cmd; cmd = cmd->next) {
+		// 		fprintf(fp, "ref_name: %s ", cmd->ref_name);
+		// 		fprintf(fp, "old_oid: %s ", oid_to_hex(&cmd->old_oid));
+		// 		fprintf(fp, "new_oid: %s\n", oid_to_hex(&cmd->new_oid));
+		// 	}
+		// 	fflush(fp);
+		// 	fclose(fp);
+		// }
+		//=====================调试代码========================
+		
+		const char *unpack_status = NULL;
 
-		FILE *fp = fopen("/home/lele/gittest/owner-local/debug.log", "a");
+		struct string_list push_options = STRING_LIST_INIT_DUP;
+		if (use_push_options)
+			read_push_options(&reader, &push_options);
+
+		//定义一个字符串变量，用于存储客户端发送的commit消息
+		struct strbuf commit_msg = STRBUF_INIT;
+		if (use_trust_chain){
+			read_trustchain_commit_msg(&reader, &commit_msg);
+			rp_error("trustchain commit msg: %s\n", commit_msg.buf);
+			strbuf_release(&commit_msg);
+		}
+
+		//=====================调试代码========================
+		//打印所有推送选项
+		FILE * fp = fopen("/home/lele/gittest/owner-local/debug.log", "a");
 		if (fp) {
-			//打印commands
-			struct command *cmd;
-			for (cmd = commands; cmd; cmd = cmd->next) {
-				fprintf(fp, "ref_name: %s ", cmd->ref_name);
-				fprintf(fp,"old_oid: %s ", oid_to_hex(&cmd->old_oid));
-				fprintf(fp,"new_oid: %s\n", oid_to_hex(&cmd->new_oid));
+			fprintf(fp, "push_option %d\n",push_options.nr);
+			struct string_list_item *item;
+			for_each_string_list_item (item, &push_options) {
+				fprintf(fp, "push_option: %s\n", item->string);
 			}
+
+			read_push_options(&reader, &push_options);
+			for_each_string_list_item (item, &push_options)
+			fprintf(fp, "push_option111: %s\n", item->string);
 			fflush(fp);
 			fclose(fp);
 		}
-		
-		const char *unpack_status = NULL;
-		struct string_list push_options = STRING_LIST_INIT_DUP;
+		//=====================调试代码========================
 
-		if (use_push_options)
-			read_push_options(&reader, &push_options);
+
+
+		//检查推送选项是否与证书一致
 		if (!check_cert_push_options(&push_options)) {
 			struct command *cmd;
 			for (cmd = commands; cmd; cmd = cmd->next)
 				cmd->error_string = "inconsistent push options";
 		}
+		//=====================逻辑代码========================
+		//检查推送选项是否有trustchain=yes
+		//设计在check_cert_push_options之后，unpack_with_sideband之前，而且即使是删除操作也要记录
+		if (check_trustchain_push_options(&push_options)) {
+			//commands中只能有一个引用，多个则报错
+			if(!commands->next){
+				// 读客户端发来的commit消息
+				// 启动一个新的线程 调用trustchain服务并获得区块，存储到变量中
+				// get_new_trustchain_block_async(commands->new_oid);
+				// rp_error("trustchain=yes, have one command\n");
+			}else{
+				rp_error("trustchain=yes, can not have more than one command\n");
+			}
+			
+			/*后续在 pre-receive钩子中检查区块是否返回，
+			    //检验区块的合法性，并获得哈希值
+				//将区块和哈希值写入库中
+				//将区块和哈希值返回客户端
+			*/
+		}
+		//=====================逻辑代码========================
 
 		prepare_shallow_info(&si, &shallow);
 		if (!si.nr_ours && !si.nr_theirs)
 			shallow_update = 0;
 		if (!delete_only(commands)) {
-			// 2. 存储对象数据
+			// 2. 存储对象数据 使用侧边带解包对象数据
+			//接收客户端发送的对象包 解包对象数据 验证对象完整性 存储到临时位置（隔离环境） 返回解包状态
 			unpack_status = unpack_with_sideband(&si);
+			// 更新浅克隆信息
 			update_shallow_info(commands, &si, &ref);
 		}
+		//确保在长时间操作期间保持网络连接活跃
 		use_keepalive = KEEPALIVE_ALWAYS;
 		// 3. 执行引用更新
 		//pre-receive 钩子在 execute_commands 函数中被调用

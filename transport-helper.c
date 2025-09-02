@@ -1135,8 +1135,9 @@ static int push_refs(struct transport *transport,
 		struct ref *remote_refs, int flags)
 {
 	struct helper_data *data = transport->data;
-
+	//如果成功（返回非零值），说明传输助手无法处理当前协议，Git 会 回退到原生传输实现（如 ssh:// 或 file://）。
 	if (process_connect(transport, 1)) {
+		//do_take_over(transport)： 将传输控制权交给原生协议（如 git_transport_push）。
 		do_take_over(transport);
 		return transport->vtable->push_refs(transport, remote_refs, flags);
 	}
@@ -1147,10 +1148,10 @@ static int push_refs(struct transport *transport,
 			  "Perhaps you should specify a branch.\n"));
 		return 0;
 	}
-
+	//普通推送、强制推送
 	if (data->push)
 		return push_refs_with_push(transport, remote_refs, flags);
-
+	//镜像推送
 	if (data->export)
 		return push_refs_with_export(transport, remote_refs, flags);
 

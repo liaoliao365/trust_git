@@ -481,6 +481,8 @@ int send_pack(struct send_pack_args *args,
 	int atomic_supported = 0;
 	int use_push_options = 0;
 	int push_options_supported = 0;
+	int use_trust_chain = 0;
+	int trust_chain_supported = 0;
 	int object_format_supported = 0;
 	unsigned cmds_sent = 0;
 	int ret;
@@ -523,6 +525,8 @@ int send_pack(struct send_pack_args *args,
 		atomic_supported = 1;
 	if (server_supports("push-options"))
 		push_options_supported = 1;
+	if (server_supports("trust-chain"))
+		trust_chain_supported = 1;
 
 	if (!server_supports_hash(the_hash_algo->name, &object_format_supported))
 		die(_("the receiving end does not support this repository's hash algorithm"));
@@ -552,6 +556,12 @@ int send_pack(struct send_pack_args *args,
 		die(_("the receiving end does not support push options"));
 	// 检查是否支持推送选项	
 	use_push_options = push_options_supported && args->push_options;
+
+	if (args->trust_chain && !trust_chain_supported)
+		die(_("the receiving end does not support trust chain"));
+	// 检查是否支持可信链选项	
+	use_trust_chain = trust_chain_supported && args->trust_chain;
+
 	// 构建能力字符串 包含状态报告、边带传输、原子推送等能力
 	// 添加哈希算法、代理信息、会话ID等
 	if (status_report == 1)
@@ -566,6 +576,8 @@ int send_pack(struct send_pack_args *args,
 		strbuf_addstr(&cap_buf, " atomic");
 	if (use_push_options)
 		strbuf_addstr(&cap_buf, " push-options");
+	if (use_trust_chain)
+		strbuf_addstr(&cap_buf, " trust-chain");
 	if (object_format_supported)
 		strbuf_addf(&cap_buf, " object-format=%s", the_hash_algo->name);
 	if (agent_supported)
@@ -661,6 +673,11 @@ int send_pack(struct send_pack_args *args,
 		for_each_string_list_item(item, args->push_options)
 			packet_buf_write(&req_buf, "%s", item->string);
 	}
+	if (use_trust_chain) {
+		packet_buf_flush(&req_buf);
+		packet_buf_write(&req_buf, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaAA");
+	}
+
 	// 缓冲区数据 发送 
 	// 根据不同的 RPC 模式选择不同的发送方式.
 	// 无状态RPC: 使用 send_sideband 发送数据，适合 HTTP 等无状态协议
