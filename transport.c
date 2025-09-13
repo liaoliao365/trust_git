@@ -1283,11 +1283,6 @@ int transport_push(struct repository *r,
 		   struct refspec *rs, int flags,
 		   unsigned int *reject_reasons)
 {
-
-printf("DEBUG: flags = 0x%x\n", flags);
-printf("DEBUG: TRANSPORT_PUSH_TRUST_CHAIN = 0x%x\n", TRANSPORT_PUSH_TRUST_CHAIN);
-printf("DEBUG: flags & TRANSPORT_PUSH_TRUST_CHAIN = 0x%x\n", flags & TRANSPORT_PUSH_TRUST_CHAIN);
-
 	*reject_reasons = 0;
 
 	if (transport_color_config() < 0)

@@ -30,6 +30,7 @@
 #include "commit-reach.h"
 #include "worktree.h"
 #include "shallow.h"
+#include "trustchain_utils.h"
 
 static const char * const receive_pack_usage[] = {
 	N_("git receive-pack <git-dir>"),
@@ -2179,6 +2180,20 @@ static void read_push_options(struct packet_reader *reader,
 	}
 }
 
+void read_trustchain_commit_msg(struct packet_reader *reader, struct strbuf *commit_msg)
+{
+	// if (packet_reader_read(reader) != PACKET_READ_NORMAL)
+	// 	die("read trustchain commit msg error");
+
+	// strbuf_addstr(commit_msg, reader->line);
+	while (1) {
+		if (packet_reader_read(reader) != PACKET_READ_NORMAL)
+			break;
+		//把reader->line追加到commit_msg中
+		strbuf_addstr(commit_msg, reader->line);
+	}
+}
+
 static const char *parse_pack_header(struct pack_header *hdr)
 {
 	switch (read_pack_header(0, hdr)) {
@@ -2486,24 +2501,19 @@ static int delete_only(struct command *commands)
 	return 1;
 }
 
-int check_trustchain_push_options(struct string_list *push_options)
-{
-	struct string_list_item *item;
-	for_each_string_list_item (item, push_options) {
-		if (strcmp(item->string, "trust_chain=yes") == 0) {
-			return 1;
-		}
-	}
-	return 0;
-}
+// int check_trustchain_push_options(struct string_list *push_options)
+// {
+// 	struct string_list_item *item;
+// 	for_each_string_list_item (item, push_options) {
+// 		if (strcmp(item->string, "trust_chain=yes") == 0) {
+// 			return 1;
+// 		}
+// 	}
+// 	return 0;
+// }
 
-void read_trustchain_commit_msg(struct packet_reader *reader, struct strbuf *commit_msg)
-{
-	if (packet_reader_read(reader) != PACKET_READ_NORMAL)
-		die("read trustchain commit msg error");
 
-	strbuf_addstr(commit_msg, reader->line);
-}
+
 
 int cmd_receive_pack(int argc, const char **argv, const char *prefix)
 {
@@ -2607,28 +2617,34 @@ int cmd_receive_pack(int argc, const char **argv, const char *prefix)
 
 		//定义一个字符串变量，用于存储客户端发送的commit消息
 		struct strbuf commit_msg = STRBUF_INIT;
+		struct strbuf contri_block = STRBUF_INIT;
+		int contri_block_tag = 0; //正确返回设为1，错误为-1
 		if (use_trust_chain){
+			if(commands->next)
+				die("trustchain=yes, can not have more than one command\n");
+			
 			read_trustchain_commit_msg(&reader, &commit_msg);
 			rp_error("trustchain commit msg: %s\n", commit_msg.buf);
-			strbuf_release(&commit_msg);
+			// 以commit_msg为参数调用tee的commit接口，返回结果存储到 contri_block中,如果合法，则返回contri_block和hash
+			get_contri_block_sync(commit_msg.buf, &contri_block, &contri_block_tag);
 		}
 
 		//=====================调试代码========================
 		//打印所有推送选项
-		FILE * fp = fopen("/home/lele/gittest/owner-local/debug.log", "a");
-		if (fp) {
-			fprintf(fp, "push_option %d\n",push_options.nr);
-			struct string_list_item *item;
-			for_each_string_list_item (item, &push_options) {
-				fprintf(fp, "push_option: %s\n", item->string);
-			}
+		// FILE * fp = fopen("/home/lele/gittest/owner-local/debug.log", "a");
+		// if (fp) {
+		// 	fprintf(fp, "push_option %d\n",push_options.nr);
+		// 	struct string_list_item *item;
+		// 	for_each_string_list_item (item, &push_options) {
+		// 		fprintf(fp, "push_option: %s\n", item->string);
+		// 	}
 
-			read_push_options(&reader, &push_options);
-			for_each_string_list_item (item, &push_options)
-			fprintf(fp, "push_option111: %s\n", item->string);
-			fflush(fp);
-			fclose(fp);
-		}
+		// 	read_push_options(&reader, &push_options);
+		// 	for_each_string_list_item (item, &push_options)
+		// 	fprintf(fp, "push_option111: %s\n", item->string);
+		// 	fflush(fp);
+		// 	fclose(fp);
+		// }
 		//=====================调试代码========================
 
 
@@ -2642,23 +2658,23 @@ int cmd_receive_pack(int argc, const char **argv, const char *prefix)
 		//=====================逻辑代码========================
 		//检查推送选项是否有trustchain=yes
 		//设计在check_cert_push_options之后，unpack_with_sideband之前，而且即使是删除操作也要记录
-		if (check_trustchain_push_options(&push_options)) {
-			//commands中只能有一个引用，多个则报错
-			if(!commands->next){
-				// 读客户端发来的commit消息
-				// 启动一个新的线程 调用trustchain服务并获得区块，存储到变量中
-				// get_new_trustchain_block_async(commands->new_oid);
-				// rp_error("trustchain=yes, have one command\n");
-			}else{
-				rp_error("trustchain=yes, can not have more than one command\n");
-			}
+		// if (check_trustchain_push_options(&push_options)) {
+		// 	//commands中只能有一个引用，多个则报错
+		// 	if(!commands->next){
+		// 		// 读客户端发来的commit消息
+		// 		// 启动一个新的线程 调用trustchain服务并获得区块，存储到变量中
+		// 		// get_new_trustchain_block_async(commands->new_oid);
+		// 		// rp_error("trustchain=yes, have one command\n");
+		// 	}else{
+		// 		rp_error("trustchain=yes, can not have more than one command\n");
+		// 	}
 			
-			/*后续在 pre-receive钩子中检查区块是否返回，
-			    //检验区块的合法性，并获得哈希值
-				//将区块和哈希值写入库中
-				//将区块和哈希值返回客户端
-			*/
-		}
+		// 	/*后续在 pre-receive钩子中检查区块是否返回，
+		// 	    //检验区块的合法性，并获得哈希值
+		// 		//将区块和哈希值写入库中
+		// 		//将区块和哈希值返回客户端
+		// 	*/
+		// }
 		//=====================逻辑代码========================
 
 		prepare_shallow_info(&si, &shallow);
@@ -2686,6 +2702,34 @@ int cmd_receive_pack(int argc, const char **argv, const char *prefix)
 			report_v2(commands, unpack_status);
 		else if (report_status)
 			report(commands, unpack_status);
+
+		struct strbuf buf = STRBUF_INIT;
+		if (use_trust_chain) {
+			//等待contri_block_tag为非0值，代表trustchain服务已经返回结果
+			while(contri_block_tag == 0) {
+				rp_error("wait for tee commit result\n");
+				sleep(1);
+			}
+			// 如果为-1，trustchain服务返回错误
+			if(contri_block_tag == -1) {
+				die("tee commit error: %s\n", commit_msg.buf);
+			}
+			// rp_error("tee commit result: %s\n", contri_block.buf);
+			// 检验contri_block的合法性，合法就存储到仓库和数据库中
+			unsigned char hash[32];
+			int ret = verify_and_store_contri_block(&contri_block, hash);
+			if (ret != 0) {
+				die("verify_and_store contri_block error: %s\n", contri_block.buf);
+			}
+			rp_error("verify_and_store contri_block successfully\n");
+
+			//返回contri_block给客户端
+			// packet_buf_write(&buf, "contri_block %s\n", contri_block.buf);
+			// packet_buf_flush(&buf);
+			strbuf_release(&buf);
+			// free(hex_hash);
+		}
+
 		run_receive_hook(commands, "post-receive", 1,
 				 &push_options);
 		run_update_post_hook(commands);
@@ -2712,8 +2756,13 @@ int cmd_receive_pack(int argc, const char **argv, const char *prefix)
 		if (auto_update_server_info)
 			update_server_info(0);
 		clear_shallow_info(&si);
+
+		//清理和资源释放
+		strbuf_release(&contri_block);
+		strbuf_release(&commit_msg);
 	}
 	//清理和资源释放
+
 	if (use_sideband)
 		packet_flush(1);
 	oid_array_clear(&shallow);

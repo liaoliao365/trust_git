@@ -1,3 +1,5 @@
+OPENSSL_SHA256=YesPlease 
+NEEDS_SSL_WITH_CRYPTO=YesPlease
 # The default target of this Makefile is...
 all::
 
@@ -828,6 +830,7 @@ LIB_H := $(sort $(patsubst ./%,%,$(shell git ls-files '*.h' ':!t/' ':!Documentat
 	-name Documentation -prune -o \
 	-name '*.h' -print)))
 
+LIB_OBJS += trustchain_utils.o
 LIB_OBJS += abspath.o
 LIB_OBJS += add-interactive.o
 LIB_OBJS += add-patch.o
@@ -1194,6 +1197,8 @@ THIRD_PARTY_SOURCES += sha1dc/%
 
 GITLIBS = common-main.o $(LIB_FILE) $(XDIFF_LIB)
 EXTLIBS =
+# 新增 jansson 库
+EXTLIBS += -ljansson
 
 GIT_USER_AGENT = git/$(GIT_VERSION)
 
@@ -1255,6 +1260,12 @@ ALL_LDFLAGS = $(LDFLAGS)
 comma := ,
 empty :=
 space := $(empty) $(empty)
+
+# MySQL 支持
+MYSQL_CFLAGS = -I/usr/include/mysql
+MYSQL_LIBS = -lmysqlclient
+BASIC_CFLAGS += $(MYSQL_CFLAGS)
+EXTLIBS += $(MYSQL_LIBS)
 
 ifdef SANITIZE
 SANITIZERS := $(foreach flag,$(subst $(comma),$(space),$(SANITIZE)),$(flag))
@@ -1464,7 +1475,7 @@ endif
 EXTLIBS += -lz
 
 ifndef NO_OPENSSL
-	OPENSSL_LIBSSL = -lssl
+	OPENSSL_LIBSSL = -lssl 
 	ifdef OPENSSLDIR
 		BASIC_CFLAGS += -I$(OPENSSLDIR)/include
 		OPENSSL_LINK = -L$(OPENSSLDIR)/$(lib) $(CC_LD_DYNPATH)$(OPENSSLDIR)/$(lib)
