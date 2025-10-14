@@ -479,7 +479,7 @@ int get_signed_commit_msg(struct ref *remote_refs, char **commit_msg)
 
 	//获取仓库在TRUSTCHAIN服务中的opkey
 	char opkey_path[PATH_MAX];
-	snprintf(opkey_path, sizeof(opkey_path), "%s/trustchain/OP_KEY.pem", get_git_dir());
+	snprintf(opkey_path, sizeof(opkey_path), "%s/trustchain/trustchain_pkcs8_2048.pem", get_git_dir());
 	strbuf_init(&buf, 0);
 	char *opkey = NULL;
 	if (strbuf_read_file(&buf, opkey_path, 0) < 0) {
@@ -492,11 +492,12 @@ int get_signed_commit_msg(struct ref *remote_refs, char **commit_msg)
 
 	// CommitHash remote_refs->new_oid
 	char *commithash = oid_to_hex(&remote_refs->new_oid);
+	// char *commithash = "f7caed3e7474e2630f26e44a4498a47fd3313c0d";
 	// printf("CommitHash = %s\n", commithash);
 
 	// signature 是对 repid, op, opkey, commit_hash 的签名
 	// 获取私钥
-	EVP_PKEY *privkey = load_private_key("/home/lele/.ssh/id_rsa");
+	EVP_PKEY *privkey = load_private_key("/home/lele/.ssh/trustchain_pkcs8_2048");
     if (!privkey) {
         fprintf(stderr, "Failed to load private key\n");
         return 1;
@@ -504,32 +505,50 @@ int get_signed_commit_msg(struct ref *remote_refs, char **commit_msg)
 
     // const char *msg = "repid=1,op=PUSH,commit_hash=abc123";
 	//msg是上面repid, op, commithash, opkey的拼接
+	
 	char *msg = xstrfmt("%s%s%s%s", repid, op, commithash, opkey);
 	printf("msg = %s\n", msg);
+
     unsigned char *sig = NULL;
     size_t siglen = 0;
+
+	//计算msg的sha256
+	unsigned char hash[32];
+	EVP_Digest(msg, strlen(msg), hash, NULL, EVP_sha256(), NULL);
+	printf("msg sha256: %s\n", binary_to_hex(hash, 32));
 
     if (trustchain_sign_message(msg, privkey, &sig, &siglen)) {
 		// //===调试代码===
         // printf("Signature generated, length = %zu\n", siglen);
-
-		// 读取公钥
-		// EVP_PKEY *opkey_pub = load_public_key_from_str(opkey);
-		// if (!opkey_pub) {
-		// 	fprintf(stderr, "Failed to load pub key from opkey str\n");
-		// 	return 1;
-		// }
+		// printf("Signature (binary): %s\n", sig);
+		char *hex_sig = binary_to_hex(sig, siglen);
+		printf("Signature (hex): %s\n", hex_sig);
+		char *b64_sig = base64_encode(sig, siglen);
+		printf("Signature (base64): %s\n", b64_sig);
+		//读取公钥
+		EVP_PKEY *opkey_pub = load_public_key_from_str(opkey);
+		if (!opkey_pub) {
+			fprintf(stderr, "Failed to load pub key from opkey str\n");
+			return 1;
+		}
 		// //用公钥验证签名
 		// if (trustchain_verify_signature(msg, opkey_pub, sig, siglen)) {
 		// 	printf("Signature verification: SUCCESS\n");
 		// } else {
 		// 	printf("Signature verification: FAILED\n");
 		// }
+		//用公钥验证签名
+		unsigned char hash[32];
+		if (trustchain_verify_signature_return_hash(msg, opkey_pub, sig, siglen, hash)) {
+			printf("Signature verification: SUCCESS\n");
+			printf("Hash after verify: %s\n", binary_to_hex(hash, 32));
+		} else {
+			printf("Signature verification: FAILED\n");
+		}
+		die("test");
 		// ===调试代码===
-		// char *b64_sig = base64_encode(sig, siglen);
-		// printf("Signature (base64): %s\n", b64_sig);
-		char *hex_sig = binary_to_hex(sig, siglen);
-		printf("Signature (hex): %s\n", hex_sig);
+
+
 
 		struct strbuf buf = STRBUF_INIT;
 		strbuf_addf(&buf,
@@ -540,7 +559,7 @@ int get_signed_commit_msg(struct ref *remote_refs, char **commit_msg)
 			"\"op_key\":\"%s\","
 			"\"signature\":\"%s\""
 			"}",
-			repid, op, commithash, opkey, hex_sig);
+			repid, op, commithash, opkey, b64_sig);
 		
 		*commit_msg = xstrdup(buf.buf);
 		strbuf_release(&buf);

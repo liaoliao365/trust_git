@@ -58,7 +58,7 @@ char *base64_encode(const unsigned char *input, int length){
     BIO_free_all(b64);
     return b64text;
 }
-
+    
 
 
 EVP_PKEY *load_public_key_from_str(const char *pubkey_str) {
@@ -71,6 +71,15 @@ EVP_PKEY *load_public_key_from_str(const char *pubkey_str) {
 
     // 从 PEM 格式解析公钥
     pkey = PEM_read_bio_PUBKEY(bio, NULL, NULL, NULL);
+    if (!pkey) {
+        // 如果失败，回到开头，尝试 PKCS#1 格式
+        BIO_reset(bio);
+        RSA *rsa = PEM_read_bio_RSAPublicKey(bio, NULL, NULL, NULL);
+        if (rsa) {
+            pkey = EVP_PKEY_new();
+            EVP_PKEY_assign_RSA(pkey, rsa);
+        }
+    }
     BIO_free(bio);
 
     if (!pkey) {
