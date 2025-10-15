@@ -27,5 +27,6 @@ int insert_contri_block_to_db(
     const char *tee_time,
     const char *tee_sig
 );
+void print_time();
 
 #endif

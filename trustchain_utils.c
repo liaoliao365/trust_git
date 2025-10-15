@@ -9,6 +9,7 @@
 #include <openssl/bio.h>
 #include <jansson.h>
 #include "cache.h"
+#include <time.h>
 
 // 数据库连接信息
 #define DB_HOST "localhost"
@@ -495,4 +496,14 @@ int insert_contri_block_to_db(
     mysql_close(conn);
     
     return affected_rows;
+}
+
+void print_time(){
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+
+    long seconds = ts.tv_sec;
+    long milliseconds = ts.tv_nsec / 1000000; // 纳秒转毫秒
+
+    printf("%ld.%03ld\n", seconds, milliseconds);
 }

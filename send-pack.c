@@ -816,6 +816,10 @@ int send_pack(struct send_pack_args *args,
 		}
 	// 有状态RPC: 使用 write_or_die 和 packet_flush，适合 SSH 等有状态协议
 	} else {
+		//打印时间戳
+		printf("write_or_die time:");
+		print_time();
+
 		write_or_die(out, req_buf.buf, req_buf.len);
 		//Git协议要求每个请求后发送flush包，告诉接收方数据包已经结束
 		packet_flush(out);
@@ -883,6 +887,7 @@ int send_pack(struct send_pack_args *args,
 			ret = -1;
 		}
 	}
+
 	// 结果验证和返回
 	if (ret < 0)
 		return ret;
@@ -890,6 +895,9 @@ int send_pack(struct send_pack_args *args,
 	if (args->porcelain)
 		return 0;
 
+	//打印时间戳
+	printf("receive_status time:");
+	print_time();
 	for (ref = remote_refs; ref; ref = ref->next) {
 		switch (ref->status) {
 		case REF_STATUS_NONE:
