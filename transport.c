@@ -22,6 +22,7 @@
 #include "protocol.h"
 #include "object-store.h"
 #include "color.h"
+#include "trustchain_utils.h"
 
 static int transport_use_color = -1;
 static char transport_colors[][COLOR_MAXLEN] = {
@@ -1314,8 +1315,17 @@ int transport_push(struct repository *r,
 
 		trace2_region_enter("transport_push", "get_refs_list", r);
 		//远程引用获取
+
+		//打印时间戳
+		printf("before get_refs_list time:");
+		print_time();
+
 		remote_refs = transport->vtable->get_refs_list(transport, 1,
 							       &transport_options);
+		//打印时间戳
+		printf("after get_refs_list time:");
+		print_time();
+
 		trace2_region_leave("transport_push", "get_refs_list", r);
 		//释放引用前缀
 		strvec_clear(&transport_options.ref_prefixes);
