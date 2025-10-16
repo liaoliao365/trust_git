@@ -2769,7 +2769,7 @@ int cmd_receive_pack(int argc, const char **argv, const char *prefix)
 		strbuf_release(&commit_msg);
 	}
 	//清理和资源释放
-	debug_log("after receive_pack 2 time:%s\n", get_timestamp_string());
+	debug_log("after receive_pack 2 time:%s\n\n", get_timestamp_string());
 	if (use_sideband)
 		packet_flush(1);
 	oid_array_clear(&shallow);

@@ -692,7 +692,7 @@ int cmd_push(int argc, const char **argv, const char *prefix)
 	// 执行推送操作
 	rc = do_push(flags, push_options, remote);
 	//打印时间戳
-	debug_log("after do_push time:%s\n", get_timestamp_string());
+	debug_log("after do_push time:%s\n\n", get_timestamp_string());
 	// 清空推送选项
 	string_list_clear(&push_options_cmdline, 0);
 	string_list_clear(&push_options_config, 0);

@@ -25,7 +25,7 @@ void debug_log(const char *format, ...) {
     if (log) {
         // fprintf(log, "debug: ");
         vfprintf(log, format, args);
-        fprintf(log, "\n");
+        // fprintf(log, "\n");
         fclose(log);
     }
 
