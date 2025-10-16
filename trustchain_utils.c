@@ -10,6 +10,7 @@
 #include <jansson.h>
 #include "cache.h"
 #include <time.h>
+#include <unistd.h>
 
 // 数据库连接信息
 #define DB_HOST "localhost"
@@ -297,8 +298,12 @@ int trustchain_verify_signature_return_hash(
 
 void get_contri_block_sync(const char *commit_msg, struct strbuf *contri_block, int *contri_block_tag)
 {
+    // 这里本来应该调用远程服务的tee的commit接口，返回结果存储到 contri_block中,如果合法，则返回contri_block
+    // 但是现在为了调试，模拟等待时间，并直接返回一个合法的contri_block，contri_block_tag设为1
     // sleep 15 seconds
     // sleep(15);
+    // usleep 毫秒级别 4184 milliseconds 
+    usleep(4184 * 1000); 
     *contri_block_tag = 1;
     json_t *json_obj = json_object();
     json_object_set_new(json_obj, "parent_hash", json_string("5ab92ff2e9e8e609398a36733c057e4903ac6643c646fbd9ab12d0f6234c8daf"));
@@ -323,12 +328,12 @@ int store_contri_block_to_repo(struct strbuf *contri_block, char * hex_hash)
         debug_log("Failed to get absolute path for git_dir: %s\n", get_git_dir());
         return -1;
     }
-    debug_log("git_dir_abs = %s\n", git_dir_abs);
+    // debug_log("git_dir_abs = %s\n", git_dir_abs);
     // 将contri_block和hash存储到仓库中
     char *contri_block_path = xstrfmt("%s/trustchain/contri_block.json", git_dir_abs);
     char *hash_path = xstrfmt("%s/refs/trustchain/head", git_dir_abs);
-    debug_log("contri_block_path = %s\n", contri_block_path);
-    debug_log("hash_path = %s\n", hash_path);
+    // debug_log("contri_block_path = %s\n", contri_block_path);
+    // debug_log("hash_path = %s\n", hash_path);
     
     // // 确保目录存在
     // if (!is_directory(git_dir_abs) && mkdir_in_gitdir(git_dir_abs)){
@@ -339,14 +344,14 @@ int store_contri_block_to_repo(struct strbuf *contri_block, char * hex_hash)
     
     // 确保contri_block_path的目录存在
     if (safe_create_leading_directories_const(contri_block_path) != SCLD_OK) {
-        debug_log("Failed to create trustchain directory\n");
+        // debug_log("Failed to create trustchain directory\n");
         free(contri_block_path);
         return -1;
     }
     
     FILE *fp = fopen(contri_block_path, "a+");
     if (!fp) {
-        debug_log("Failed to open contri_block_path\n");
+        // debug_log("Failed to open contri_block_path\n");
         free(contri_block_path);
         // die("Failed to open contri_block_path\n");
         return -1;
@@ -365,7 +370,7 @@ int store_contri_block_to_repo(struct strbuf *contri_block, char * hex_hash)
 
     FILE *fp_hash = fopen(hash_path, "w");
     if (!fp_hash) {
-        debug_log("Failed to open hash_path\n");
+        // debug_log("Failed to open hash_path\n");
         free(hash_path);
         return -1;
     }
@@ -386,22 +391,22 @@ int verify_and_store_contri_block(struct strbuf *contri_block, unsigned char has
 
     json_t *parent_hash = json_object_get(json_obj, "parent_hash");
     const char *parent_hash_value = json_string_value(parent_hash);
-    debug_log("parent_hash_value = %s\n", parent_hash_value);
+    // debug_log("parent_hash_value = %s\n", parent_hash_value);
     json_t *op = json_object_get(json_obj, "op");
     const char *op_value = json_string_value(op);
-    debug_log("op_value = %s\n", op_value);
+    // debug_log("op_value = %s\n", op_value);
     json_t *op_key = json_object_get(json_obj, "op_key");
     const char *op_key_value = json_string_value(op_key);
-    debug_log("op_key_value = %s\n", op_key_value);
+    // debug_log("op_key_value = %s\n", op_key_value);
     json_t *commit_hash = json_object_get(json_obj, "commit_hash");
     const char *commit_hash_value = json_string_value(commit_hash);
-    debug_log("commit_hash_value = %s\n", commit_hash_value);
+    // debug_log("commit_hash_value = %s\n", commit_hash_value);
     json_t *tee_time = json_object_get(json_obj, "tee_time");
     const char *tee_time_value = json_string_value(tee_time);
-    debug_log("tee_time_value = %s\n", tee_time_value);
+    // debug_log("tee_time_value = %s\n", tee_time_value);
     json_t *tee_sig = json_object_get(json_obj, "tee_sig");
     const char *tee_sig_hex = json_string_value(tee_sig);
-    debug_log("tee_sig_hex = %s\n", tee_sig_hex);
+    // debug_log("tee_sig_hex = %s\n", tee_sig_hex);
     
 
     if (parent_hash_value == NULL || op_value == NULL || op_key_value == NULL || commit_hash_value == NULL || tee_time_value == NULL || tee_sig_hex == NULL) {
@@ -413,10 +418,10 @@ int verify_and_store_contri_block(struct strbuf *contri_block, unsigned char has
         die("hex_to_bytes failed\n");
         return -1;
     }
-    debug_log("tee_sig_binary = %s\n", tee_sig_binary);
+    // debug_log("tee_sig_binary = %s\n", tee_sig_binary);
     //将parent_hash，op，commit_hash，op_key，tee_time，tee_sig拼接成一个字符串
     char *msg = xstrfmt("%s%s%s%s%s", parent_hash_value, op_value, commit_hash_value, op_key_value, tee_time_value);
-    debug_log("parent_hash,op,commit_hash,op_key,tee_time,tee_sig 拼接的字符串 msg = %s\n", msg);
+    // debug_log("parent_hash,op,commit_hash,op_key,tee_time,tee_sig 拼接的字符串 msg = %s\n", msg);
 
 
     //===========验证tee_sig===============
@@ -440,13 +445,13 @@ int verify_and_store_contri_block(struct strbuf *contri_block, unsigned char has
     // char *hex_hash = binary_to_hex(hash, 32);
     char *hex_hash = "ec2b3ee7ad1d552c4508e025a2d5ad778290abf9";
     if (store_contri_block_to_repo(contri_block, hex_hash)){
-        debug_log("store contri_block into repo error\n");
+        // debug_log("store contri_block into repo error\n");
     }
     //=============将contri_block和hash存储到仓库中 结束=============
 
     //=============将contri_block存储到数据库中=============
     if (insert_contri_block_to_db(parent_hash_value, op_value, op_key_value, commit_hash_value, tee_time_value, tee_sig_hex) < 0){
-        debug_log("insert contri_block into db error\n");
+        // debug_log("insert contri_block into db error\n");
     }
     //=============将contri_block存储到数据库中 结束=============
 
@@ -476,13 +481,13 @@ int insert_contri_block_to_db(
     conn = mysql_init(NULL);
     
     if (conn == NULL) {
-        debug_log("mysql_init() failed\n");
+        // debug_log("mysql_init() failed\n");
         return -1;
     }
     
     // 连接到数据库
     if (mysql_real_connect(conn, DB_HOST, DB_USER, DB_PASS, DB_NAME, 0, NULL, 0) == NULL) {
-        debug_log("mysql_real_connect() failed: %s\n", mysql_error(conn));
+        // debug_log("mysql_real_connect() failed: %s\n", mysql_error(conn));
         mysql_close(conn);
         return -1;
     }
@@ -497,7 +502,7 @@ int insert_contri_block_to_db(
     
     // 执行查询
     if (mysql_query(conn, query)) {
-        debug_log("mysql_query() failed: %s\n", mysql_error(conn));
+        // debug_log("mysql_query() failed: %s\n", mysql_error(conn));
         mysql_close(conn);
         return -1;
     }

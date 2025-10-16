@@ -2626,10 +2626,10 @@ int cmd_receive_pack(int argc, const char **argv, const char *prefix)
 				die("trustchain=yes, can not have more than one command\n");
 			
 			read_trustchain_commit_msg(&reader, &commit_msg);
-			rp_error("trustchain commit msg: %s\n", commit_msg.buf);
+			// rp_error("trustchain commit msg: %s\n", commit_msg.buf);
 
 			debug_log("before proofing time:%s\n", get_timestamp_string());
-			// 以commit_msg为参数调用tee的commit接口，返回结果存储到 contri_block中,如果合法，则返回contri_block和hash
+			// 以commit_msg为参数调用tee的commit接口，返回结果存储到 contri_block中,如果合法，则返回contri_block
 			get_contri_block_sync(commit_msg.buf, &contri_block, &contri_block_tag);
 			debug_log("after proofing time:%s\n", get_timestamp_string());
 		}
@@ -2728,7 +2728,7 @@ int cmd_receive_pack(int argc, const char **argv, const char *prefix)
 			if (ret != 0) {
 				die("verify_and_store contri_block error: %s\n", contri_block.buf);
 			}
-			rp_error("verify_and_store contri_block successfully\n");
+			// rp_error("verify_and_store contri_block successfully\n");
 
 			//返回contri_block给客户端
 			// packet_buf_write(&buf, "contri_block %s\n", contri_block.buf);

@@ -507,45 +507,46 @@ int get_signed_commit_msg(struct ref *remote_refs, char **commit_msg)
 	//msg是上面repid, op, commithash, opkey的拼接
 	
 	char *msg = xstrfmt("%s%s%s%s", repid, op, commithash, opkey);
-	printf("msg = %s\n", msg);
+	// printf("msg = %s\n", msg);
 
     unsigned char *sig = NULL;
     size_t siglen = 0;
 
-	//计算msg的sha256
-	unsigned char hash[32];
-	EVP_Digest(msg, strlen(msg), hash, NULL, EVP_sha256(), NULL);
-	printf("msg sha256: %s\n", binary_to_hex(hash, 32));
+	// //计算msg的sha256
+	// unsigned char hash[32];
+	// EVP_Digest(msg, strlen(msg), hash, NULL, EVP_sha256(), NULL);
+	// printf("msg sha256: %s\n", binary_to_hex(hash, 32));
 
     if (trustchain_sign_message(msg, privkey, &sig, &siglen)) {
 		// //===调试代码===
         // printf("Signature generated, length = %zu\n", siglen);
 		// printf("Signature (binary): %s\n", sig);
-		char *hex_sig = binary_to_hex(sig, siglen);
-		printf("Signature (hex): %s\n", hex_sig);
+		// char *hex_sig = binary_to_hex(sig, siglen);
+		// printf("Signature (hex): %s\n", hex_sig);
 		char *b64_sig = base64_encode(sig, siglen);
-		printf("Signature (base64): %s\n", b64_sig);
-		//读取公钥
-		EVP_PKEY *opkey_pub = load_public_key_from_str(opkey);
-		if (!opkey_pub) {
-			fprintf(stderr, "Failed to load pub key from opkey str\n");
-			return 1;
-		}
+		// printf("Signature (base64): %s\n", b64_sig);
+		// //读取公钥
+		// EVP_PKEY *opkey_pub = load_public_key_from_str(opkey);
+		// if (!opkey_pub) {
+		// 	fprintf(stderr, "Failed to load pub key from opkey str\n");
+		// 	return 1;
+		// }
 		// //用公钥验证签名
 		// if (trustchain_verify_signature(msg, opkey_pub, sig, siglen)) {
 		// 	printf("Signature verification: SUCCESS\n");
 		// } else {
 		// 	printf("Signature verification: FAILED\n");
 		// }
+
 		//用公钥验证签名
-		unsigned char hash[32];
-		if (trustchain_verify_signature_return_hash(msg, opkey_pub, sig, siglen, hash)) {
-			printf("Signature verification: SUCCESS\n");
-			printf("Hash after verify: %s\n", binary_to_hex(hash, 32));
-		} else {
-			printf("Signature verification: FAILED\n");
-		}
-		die("test");
+		// unsigned char hash[32];
+		// if (trustchain_verify_signature_return_hash(msg, opkey_pub, sig, siglen, hash)) {
+		// 	printf("Signature verification: SUCCESS\n");
+		// 	printf("Hash after verify: %s\n", binary_to_hex(hash, 32));
+		// } else {
+		// 	printf("Signature verification: FAILED\n");
+		// }
+		// die("test");
 		// ===调试代码===
 
 
@@ -563,7 +564,7 @@ int get_signed_commit_msg(struct ref *remote_refs, char **commit_msg)
 		
 		*commit_msg = xstrdup(buf.buf);
 		strbuf_release(&buf);
-		free(hex_sig);
+		// free(hex_sig);
     } else {
         fprintf(stderr, "Signing failed\n");
 		// 清理资源
