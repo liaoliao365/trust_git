@@ -2628,10 +2628,13 @@ int cmd_receive_pack(int argc, const char **argv, const char *prefix)
 			read_trustchain_commit_msg(&reader, &commit_msg);
 			// rp_error("trustchain commit msg: %s\n", commit_msg.buf);
 
-			debug_log("before proofing time:%s\n", get_timestamp_string());
+			// debug_log("before proofing time:%s\n", get_timestamp_string());
 			// 以commit_msg为参数调用tee的commit接口，返回结果存储到 contri_block中,如果合法，则返回contri_block
-			get_contri_block_sync(commit_msg.buf, &contri_block, &contri_block_tag);
-			debug_log("after proofing time:%s\n", get_timestamp_string());
+			// get_contri_block_sync(commit_msg.buf, &contri_block, &contri_block_tag);
+
+			run_async(commit_msg.buf, &contri_block, &contri_block_tag);
+
+			// debug_log("after proofing time:%s\n", get_timestamp_string());
 		}
 
 		//=====================调试代码========================

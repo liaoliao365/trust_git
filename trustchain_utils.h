@@ -18,6 +18,8 @@ int trustchain_verify_signature_return_hash(
     const unsigned char *sig, size_t siglen,
     unsigned char out_hash[32]);  
 char *base64_encode(const unsigned char *input, int length);
+void run_async(const char *commit_msg, struct strbuf *contri_block, int *contri_block_tag);
+void* async_task(void *arg);
 void get_contri_block_sync(const char *commit_msg, struct strbuf *contri_block, int *contri_block_tag);
 int verify_and_store_contri_block(struct strbuf *contri_block, unsigned char hash[32]);
 int store_contri_block_to_repo(struct strbuf *contri_block, char * hex_hash);

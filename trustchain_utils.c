@@ -11,12 +11,20 @@
 #include "cache.h"
 #include <time.h>
 #include <unistd.h>
+#include <pthread.h>
 
 // 数据库连接信息
 #define DB_HOST "localhost"
 #define DB_USER "trustchain"
 #define DB_PASS "trustchain"  // 如果需要密码，请填写
 #define DB_NAME "trustchaindb"
+
+
+typedef struct {
+    const char *commit_msg;
+    struct strbuf *contri_block;
+    int *contri_block_tag;
+} async_arg_t;
 
 void debug_log(const char *format, ...) {
     va_list args;
@@ -294,6 +302,33 @@ int trustchain_verify_signature_return_hash(
 //     return ret > 0;
 // }
 
+void run_async(const char *commit_msg, struct strbuf *contri_block, int *contri_block_tag) {
+    pthread_t tid;
+
+    async_arg_t *arg = malloc(sizeof(async_arg_t));
+    arg->commit_msg = commit_msg;
+    arg->contri_block = contri_block;
+    arg->contri_block_tag = contri_block_tag;
+
+    if (pthread_create(&tid, NULL, async_task, arg) != 0) {
+        perror("pthread_create failed");
+        free(arg);
+        return;
+    }
+
+    pthread_detach(tid);  // 自动释放线程资源
+}
+
+// 异步线程函数
+void* async_task(void *arg) {
+    async_arg_t *t = (async_arg_t*)arg;
+
+    debug_log("before proofing time:%s\n", get_timestamp_string());
+    get_contri_block_sync(t->commit_msg, t->contri_block, t->contri_block_tag);
+    debug_log("after proofing time:%s\n", get_timestamp_string());
+
+    return NULL;
+}
 
 
 void get_contri_block_sync(const char *commit_msg, struct strbuf *contri_block, int *contri_block_tag)
