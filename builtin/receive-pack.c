@@ -2723,11 +2723,11 @@ int cmd_receive_pack(int argc, const char **argv, const char *prefix)
 			}
 			// rp_error("tee commit result: %s\n", contri_block.buf);
 			// 检验contri_block的合法性，合法就存储到仓库和数据库中
-			unsigned char hash[32];
-			int ret = verify_and_store_contri_block(&contri_block, hash);
-			if (ret != 0) {
-				die("verify_and_store contri_block error: %s\n", contri_block.buf);
-			}
+			// unsigned char hash[32];
+			// int ret = verify_and_store_contri_block(&contri_block, hash);
+			// if (ret != 0) {
+			// 	die("verify_and_store contri_block error: %s\n", contri_block.buf);
+			// }
 			// rp_error("verify_and_store contri_block successfully\n");
 
 			//返回contri_block给客户端
