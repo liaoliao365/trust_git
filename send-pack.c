@@ -677,8 +677,6 @@ int send_pack(struct send_pack_args *args,
 	// 检查是否支持推送选项	
 	use_push_options = push_options_supported && args->push_options;
 
-	die("trust_chain_supported = %d", trust_chain_supported);
-	die("args->trust_chain = %d", args->trust_chain);
 	if (args->trust_chain && !trust_chain_supported)
 		die(_("the receiving end does not support trust chain"));
 	// 检查是否支持可信链选项	
