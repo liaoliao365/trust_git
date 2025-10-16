@@ -17,19 +17,32 @@
 #define DB_PASS "trustchain"  // 如果需要密码，请填写
 #define DB_NAME "trustchaindb"
 
-static void debug_log(const char *format, ...) {
+void debug_log(const char *format, ...) {
     va_list args;
     va_start(args, format);
     
-    FILE *log = fopen("/home/lele/gittest/owner-local/debug.log", "a");
+    FILE *log = fopen("/home/lele/debuggit.log", "a");
     if (log) {
-        fprintf(log, "debug: ");
+        // fprintf(log, "debug: ");
         vfprintf(log, format, args);
         fprintf(log, "\n");
         fclose(log);
     }
 
     va_end(args);
+}
+
+
+//返回时间戳字符串
+char *get_timestamp_string(){
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+
+    long seconds = ts.tv_sec;
+    long milliseconds = ts.tv_nsec / 1000000; // 纳秒转毫秒
+
+    // printf("%ld.%03ld\n", seconds, milliseconds);
+    return xstrfmt("%ld.%03ld", seconds, milliseconds);
 }
 
 char *binary_to_hex(const unsigned char *data, size_t len) {
@@ -498,12 +511,3 @@ int insert_contri_block_to_db(
     return affected_rows;
 }
 
-void print_time(){
-    struct timespec ts;
-    clock_gettime(CLOCK_REALTIME, &ts);
-
-    long seconds = ts.tv_sec;
-    long milliseconds = ts.tv_nsec / 1000000; // 纳秒转毫秒
-
-    printf("%ld.%03ld\n", seconds, milliseconds);
-}

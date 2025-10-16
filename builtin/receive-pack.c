@@ -2587,6 +2587,8 @@ int cmd_receive_pack(int argc, const char **argv, const char *prefix)
 	}
 	if (advertise_refs)
 		return 0;
+
+	debug_log("before receive_pack 2 time:%s\n", get_timestamp_string());
 	//数据包读取器初始化
 	packet_reader_init(&reader, 0, NULL, 0,
 			   PACKET_READ_CHOMP_NEWLINE |
@@ -2625,8 +2627,11 @@ int cmd_receive_pack(int argc, const char **argv, const char *prefix)
 			
 			read_trustchain_commit_msg(&reader, &commit_msg);
 			rp_error("trustchain commit msg: %s\n", commit_msg.buf);
+
+			debug_log("before proofing time:%s\n", get_timestamp_string());
 			// 以commit_msg为参数调用tee的commit接口，返回结果存储到 contri_block中,如果合法，则返回contri_block和hash
 			get_contri_block_sync(commit_msg.buf, &contri_block, &contri_block_tag);
+			debug_log("after proofing time:%s\n", get_timestamp_string());
 		}
 
 		//=====================调试代码========================
@@ -2647,7 +2652,7 @@ int cmd_receive_pack(int argc, const char **argv, const char *prefix)
 		// }
 		//=====================调试代码========================
 
-
+		debug_log("before unpack time:%s\n", get_timestamp_string());
 
 		//检查推送选项是否与证书一致
 		if (!check_cert_push_options(&push_options)) {
@@ -2702,6 +2707,8 @@ int cmd_receive_pack(int argc, const char **argv, const char *prefix)
 			report_v2(commands, unpack_status);
 		else if (report_status)
 			report(commands, unpack_status);
+
+		debug_log("after unpack time:%s\n", get_timestamp_string());
 
 		struct strbuf buf = STRBUF_INIT;
 		if (use_trust_chain) {
@@ -2762,7 +2769,7 @@ int cmd_receive_pack(int argc, const char **argv, const char *prefix)
 		strbuf_release(&commit_msg);
 	}
 	//清理和资源释放
-
+	debug_log("after receive_pack 2 time:%s\n", get_timestamp_string());
 	if (use_sideband)
 		packet_flush(1);
 	oid_array_clear(&shallow);

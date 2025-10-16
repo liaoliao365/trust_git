@@ -3,6 +3,8 @@
 #include <openssl/evp.h>
 #include "cache.h"
 
+void debug_log(const char *format, ...);
+char *get_timestamp_string();
 char *binary_to_hex(const unsigned char *data, size_t len);
 EVP_PKEY *load_public_key_from_str(const char *pubkey_str);
 EVP_PKEY *load_public_key_from_file(const char *filename);
@@ -27,6 +29,5 @@ int insert_contri_block_to_db(
     const char *tee_time,
     const char *tee_sig
 );
-void print_time();
 
 #endif

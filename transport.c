@@ -1317,14 +1317,12 @@ int transport_push(struct repository *r,
 		//远程引用获取
 
 		//打印时间戳
-		printf("before get_refs_list time:");
-		print_time();
+		debug_log("before get_refs_list time:%s\n", get_timestamp_string());
 
 		remote_refs = transport->vtable->get_refs_list(transport, 1,
 							       &transport_options);
 		//打印时间戳
-		printf("after get_refs_list time:");
-		print_time();
+		debug_log("after get_refs_list time:%s\n", get_timestamp_string());
 
 		trace2_region_leave("transport_push", "get_refs_list", r);
 		//释放引用前缀
