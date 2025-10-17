@@ -302,21 +302,21 @@ int trustchain_verify_signature_return_hash(
 //     return ret > 0;
 // }
 
-void run_async(const char *commit_msg, struct strbuf *contri_block, int *contri_block_tag) {
-    pthread_t tid;
+void run_async(const char *commit_msg, struct strbuf *contri_block, int *contri_block_tag, pthread_t *tid) {
+    // pthread_t tid;
 
     async_arg_t *arg = malloc(sizeof(async_arg_t));
     arg->commit_msg = commit_msg;
     arg->contri_block = contri_block;
     arg->contri_block_tag = contri_block_tag;
 
-    if (pthread_create(&tid, NULL, async_task, arg) != 0) {
+    if (pthread_create(tid, NULL, async_task, arg) != 0) {
         perror("pthread_create failed");
         free(arg);
         return;
     }
 
-    pthread_detach(tid);  // 自动释放线程资源
+    // pthread_detach(tid);  // 自动释放线程资源
 }
 
 // 异步线程函数
