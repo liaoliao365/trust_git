@@ -347,7 +347,8 @@ void get_contri_block_sync(const char *commit_msg, struct strbuf *contri_block, 
     // sleep 15 seconds
     // sleep(15);
     // usleep 毫秒级别 4184 milliseconds 
-    usleep(4184 * 1000); 
+    // 测试：完全移除延迟，只保留CPU操作
+    // usleep(4184 * 1000); 
     *contri_block_tag = 1;
     json_t *json_obj = json_object();
     json_object_set_new(json_obj, "parent_hash", json_string("5ab92ff2e9e8e609398a36733c057e4903ac6643c646fbd9ab12d0f6234c8daf"));
