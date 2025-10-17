@@ -2693,9 +2693,12 @@ int cmd_receive_pack(int argc, const char **argv, const char *prefix)
 		if (!delete_only(commands)) {
 			// 2. 存储对象数据 使用侧边带解包对象数据
 			//接收客户端发送的对象包 解包对象数据 验证对象完整性 存储到临时位置（隔离环境） 返回解包状态
+			debug_log("before unpack time1:%s\n", get_timestamp_string());
 			unpack_status = unpack_with_sideband(&si);
 			// 更新浅克隆信息
 			update_shallow_info(commands, &si, &ref);
+			debug_log("after unpack time1:%s\n", get_timestamp_string());
+
 		}
 		//确保在长时间操作期间保持网络连接活跃
 		use_keepalive = KEEPALIVE_ALWAYS;
@@ -2722,7 +2725,9 @@ int cmd_receive_pack(int argc, const char **argv, const char *prefix)
 			// 	rp_error("wait for tee commit result\n");
 			// 	sleep(1);
 			// }
+			debug_log("before trustchain join time:%s\n", get_timestamp_string());
 			pthread_join(trustchain_tid, NULL);
+			debug_log("after trustchain join time:%s\n", get_timestamp_string());
 			// 如果为-1，trustchain服务返回错误
 			if(contri_block_tag == -1) {
 				die("tee commit error: %s\n", commit_msg.buf);
