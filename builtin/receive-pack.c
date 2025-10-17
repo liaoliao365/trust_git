@@ -2588,6 +2588,7 @@ int cmd_receive_pack(int argc, const char **argv, const char *prefix)
 	if (advertise_refs)
 		return 0;
 
+	init_log();
 	debug_log("before receive_pack 2 time:%s\n", get_timestamp_string());
 	//数据包读取器初始化
 	packet_reader_init(&reader, 0, NULL, 0,
@@ -2775,6 +2776,7 @@ int cmd_receive_pack(int argc, const char **argv, const char *prefix)
 	}
 	//清理和资源释放
 	debug_log("after receive_pack 2 time:%s\n\n", get_timestamp_string());
+	close_log();
 	if (use_sideband)
 		packet_flush(1);
 	oid_array_clear(&shallow);

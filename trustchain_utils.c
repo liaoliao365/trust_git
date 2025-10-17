@@ -19,6 +19,7 @@
 #define DB_PASS "trustchain"  // 如果需要密码，请填写
 #define DB_NAME "trustchaindb"
 
+FILE *log=NULL;
 
 typedef struct {
     const char *commit_msg;
@@ -26,16 +27,24 @@ typedef struct {
     int *contri_block_tag;
 } async_arg_t;
 
+void init_log() {
+    log = fopen("/home/lele/debuggit.log", "a");
+}
+
+void close_log() {
+    fclose(log);
+}
+
 void debug_log(const char *format, ...) {
     va_list args;
     va_start(args, format);
     
-    FILE *log = fopen("/home/lele/debuggit.log", "a");
+    // FILE *log = fopen("/home/lele/debuggit.log", "a");
     if (log) {
         // fprintf(log, "debug: ");
         vfprintf(log, format, args);
         // fprintf(log, "\n");
-        fclose(log);
+        // fclose(log);
     }
 
     va_end(args);

@@ -3,6 +3,8 @@
 #include <openssl/evp.h>
 #include "cache.h"
 
+void init_log();
+void close_log();
 void debug_log(const char *format, ...);
 char *get_timestamp_string();
 char *binary_to_hex(const unsigned char *data, size_t len);

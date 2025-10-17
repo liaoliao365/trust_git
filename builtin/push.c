@@ -542,6 +542,7 @@ static int git_push_config(const char *k, const char *v, void *cb)
 int cmd_push(int argc, const char **argv, const char *prefix)
 {
 	//打印时间戳
+	init_log();
 	debug_log("cmd_push time:%s\n", get_timestamp_string());
 
 	int flags = 0;// 推送标志位
@@ -693,6 +694,7 @@ int cmd_push(int argc, const char **argv, const char *prefix)
 	rc = do_push(flags, push_options, remote);
 	//打印时间戳
 	debug_log("after do_push time:%s\n\n", get_timestamp_string());
+	close_log();
 	// 清空推送选项
 	string_list_clear(&push_options_cmdline, 0);
 	string_list_clear(&push_options_config, 0);
