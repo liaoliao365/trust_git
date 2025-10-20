@@ -2638,6 +2638,7 @@ int cmd_receive_pack(int argc, const char **argv, const char *prefix)
 			}
 			if (pid == 0) {
 				// get_contri_block_sync(commit_msg.buf, &contri_block, &contri_block_tag);
+				sleep(4);
 				debug_log("after proofing time:%s\n", get_timestamp_string());
 				exit(0);
 			}
