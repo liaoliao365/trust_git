@@ -2512,7 +2512,12 @@ static int delete_only(struct command *commands)
 // 	return 0;
 // }
 
-
+static void *dummy(void *arg)
+{
+    // 模拟一个非常快的线程
+    (void)arg;  // 避免未使用参数的警告
+    return NULL;
+}
 
 
 int cmd_receive_pack(int argc, const char **argv, const char *prefix)
@@ -2634,7 +2639,8 @@ int cmd_receive_pack(int argc, const char **argv, const char *prefix)
 			// 以commit_msg为参数调用tee的commit接口，返回结果存储到 contri_block中,如果合法，则返回contri_block
 			// get_contri_block_sync(commit_msg.buf, &contri_block, &contri_block_tag);
 			
-			run_async(commit_msg.buf, &contri_block, &contri_block_tag, &trustchain_tid);
+			// run_async(commit_msg.buf, &contri_block, &contri_block_tag, &trustchain_tid);
+			pthread_create(&trustchain_tid, NULL, dummy, NULL);
 
 			// debug_log("after proofing time:%s\n", get_timestamp_string());
 		}
