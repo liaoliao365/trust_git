@@ -2627,7 +2627,8 @@ int cmd_receive_pack(int argc, const char **argv, const char *prefix)
 		struct strbuf commit_msg = STRBUF_INIT;
 		struct strbuf contri_block = STRBUF_INIT;
 		int contri_block_tag = 0; //正确返回设为1，错误为-1
-		pthread_t trustchain_tid;
+		// pthread_t trustchain_tid;
+		pid_t pid;
 		if (use_trust_chain){
 			if(commands->next)
 				die("trustchain=yes, can not have more than one command\n");
@@ -2640,7 +2641,18 @@ int cmd_receive_pack(int argc, const char **argv, const char *prefix)
 			// get_contri_block_sync(commit_msg.buf, &contri_block, &contri_block_tag);
 			
 			// run_async(commit_msg.buf, &contri_block, &contri_block_tag, &trustchain_tid);
-			pthread_create(&trustchain_tid, NULL, dummy, NULL);
+			// pthread_create(&trustchain_tid, NULL, dummy, NULL);
+			pid = fork();
+
+			if (pid < 0) {
+				die("fork failed\n");
+			}
+		
+			if (pid == 0) {
+				// 子进程执行网络调用
+				
+				exit(0);  // 子进程结束
+			}
 
 			// debug_log("after proofing time:%s\n", get_timestamp_string());
 		}
@@ -2732,7 +2744,8 @@ int cmd_receive_pack(int argc, const char **argv, const char *prefix)
 			// 	sleep(1);
 			// }
 			debug_log("before trustchain join time:%s\n", get_timestamp_string());
-			pthread_join(trustchain_tid, NULL);
+			// pthread_join(trustchain_tid, NULL);
+			waitpid(pid, NULL, 0);
 			debug_log("after trustchain join time:%s\n", get_timestamp_string());
 			// 如果为-1，trustchain服务返回错误
 			if(contri_block_tag == -1) {
