@@ -301,9 +301,9 @@ void get_contri_block_sync(const char *commit_msg, struct strbuf *contri_block, 
     // 这里本来应该调用远程服务的tee的commit接口，返回结果存储到 contri_block中,如果合法，则返回contri_block
     // 但是现在为了调试，模拟等待时间，并直接返回一个合法的contri_block，contri_block_tag设为1
     // sleep 15 seconds
-    // sleep(15);
+    sleep(10);
     // usleep 毫秒级别 4184 milliseconds 
-    usleep(4184 * 1000); 
+    // usleep(4184 * 1000); 
     *contri_block_tag = 1;
     json_t *json_obj = json_object();
     json_object_set_new(json_obj, "parent_hash", json_string("5ab92ff2e9e8e609398a36733c057e4903ac6643c646fbd9ab12d0f6234c8daf"));
