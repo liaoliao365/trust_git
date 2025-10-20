@@ -2621,6 +2621,7 @@ int cmd_receive_pack(int argc, const char **argv, const char *prefix)
 		struct strbuf commit_msg = STRBUF_INIT;
 		struct strbuf contri_block = STRBUF_INIT;
 		int contri_block_tag = 0; //正确返回设为1，错误为-1
+		pid_t pid = -1;
 		if (use_trust_chain){
 			if(commands->next)
 				die("trustchain=yes, can not have more than one command\n");
@@ -2630,8 +2631,18 @@ int cmd_receive_pack(int argc, const char **argv, const char *prefix)
 
 			debug_log("before proofing time:%s\n", get_timestamp_string());
 			// 以commit_msg为参数调用tee的commit接口，返回结果存储到 contri_block中,如果合法，则返回contri_block
-			get_contri_block_sync(commit_msg.buf, &contri_block, &contri_block_tag);
-			debug_log("after proofing time:%s\n", get_timestamp_string());
+			// get_contri_block_sync(commit_msg.buf, &contri_block, &contri_block_tag);
+			pid = fork();
+			if (pid < 0) {
+				die("fork failed\n");
+			}
+			if (pid == 0) {
+				// get_contri_block_sync(commit_msg.buf, &contri_block, &contri_block_tag);
+				debug_log("after proofing time:%s\n", get_timestamp_string());
+				exit(0);
+			}
+			
+			
 		}
 
 		//=====================调试代码========================
@@ -2710,17 +2721,18 @@ int cmd_receive_pack(int argc, const char **argv, const char *prefix)
 
 		debug_log("after unpack time:%s\n", get_timestamp_string());
 
-		struct strbuf buf = STRBUF_INIT;
+		// struct strbuf buf = STRBUF_INIT;
 		if (use_trust_chain) {
 			//等待contri_block_tag为非0值，代表trustchain服务已经返回结果
-			while(contri_block_tag == 0) {
-				rp_error("wait for tee commit result\n");
-				sleep(1);
-			}
-			// 如果为-1，trustchain服务返回错误
-			if(contri_block_tag == -1) {
-				die("tee commit error: %s\n", commit_msg.buf);
-			}
+			waitpid(pid, NULL, 0);
+			// while(contri_block_tag == 0) {
+			// 	rp_error("wait for tee commit result\n");
+			// 	sleep(1);
+			// }
+			// // 如果为-1，trustchain服务返回错误
+			// if(contri_block_tag == -1) {
+			// 	die("tee commit error: %s\n", commit_msg.buf);
+			// }
 			// rp_error("tee commit result: %s\n", contri_block.buf);
 			// 检验contri_block的合法性，合法就存储到仓库和数据库中
 			// unsigned char hash[32];
@@ -2733,7 +2745,7 @@ int cmd_receive_pack(int argc, const char **argv, const char *prefix)
 			//返回contri_block给客户端
 			// packet_buf_write(&buf, "contri_block %s\n", contri_block.buf);
 			// packet_buf_flush(&buf);
-			strbuf_release(&buf);
+			// strbuf_release(&buf);
 			// free(hex_hash);
 		}
 
