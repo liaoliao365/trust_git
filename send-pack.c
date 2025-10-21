@@ -818,7 +818,7 @@ int send_pack(struct send_pack_args *args,
 	// 有状态RPC: 使用 write_or_die 和 packet_flush，适合 SSH 等有状态协议
 	} else {
 		//打印时间戳
-		debug_log("before send_pack time:%s\n", get_timestamp_string());
+		// debug_log("###before send_pack time:%s\n", get_timestamp_string());
 
 		write_or_die(out, req_buf.buf, req_buf.len);
 		//Git协议要求每个请求后发送flush包，告诉接收方数据包已经结束
@@ -896,7 +896,7 @@ int send_pack(struct send_pack_args *args,
 		return 0;
 
 	//打印时间戳
-	debug_log("after send_pack time:%s\n", get_timestamp_string());
+	// debug_log("###after send_pack time:%s\n", get_timestamp_string());
 
 	for (ref = remote_refs; ref; ref = ref->next) {
 		switch (ref->status) {
